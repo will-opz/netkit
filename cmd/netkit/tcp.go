@@ -29,6 +29,9 @@ type TCPReport struct {
  DNSDurationMS int64 `json:"dns_duration_ms"`
  DNSerror string `json:"dns_error,omitempty"`
  Attempts []TCPAttempt `json:"attempts"`
+ AllIPs bool `json:"all_ips,omitempty"`
+ SuccessCount int `json:"success_count,omitempty"`
+ FailureCount int `json:"failure_count,omitempty"`
  ConnectedIP string `json:"connected_ip,omitempty"`
  ConnectDurationMS int64 `json:"connect_duration_ms,omitempty"`
  TotalDurationMS int64 `json:"total_duration_ms"`
@@ -45,7 +48,10 @@ func validTCPHost(host string)bool{
  return validDomain(host)
 }
 func probeTCP(ctx context.Context,host string,port int,resolve TCPResolver)(report TCPReport){
- report=TCPReport{Host:host,Port:port,Status:"unknown",Attempts:[]TCPAttempt{}}
+ return probeTCPMode(ctx,host,port,resolve,false)
+}
+func probeTCPMode(ctx context.Context,host string,port int,resolve TCPResolver,allIPs bool)(report TCPReport){
+ report=TCPReport{Host:host,Port:port,Status:"unknown",Attempts:[]TCPAttempt{},AllIPs:allIPs}
  start:=time.Now()
  defer func(){report.TotalDurationMS=time.Since(start).Milliseconds()}()
  if resolve==nil {resolve=systemTCPResolve}
@@ -91,30 +97,38 @@ func probeTCP(ctx context.Context,host string,port int,resolve TCPResolver)(repo
    conn.Close()
    report.Attempts=append(report.Attempts,attempt)
    report.ConnectedIP=ip
-   report.ConnectDurationMS=duration
+   if report.ConnectedIP==""{report.ConnectDurationMS=duration}
+   report.SuccessCount++
    report.Status="connected"
-   return report
+   if !allIPs{return report}
+   continue
   }
   attempt.Error=err.Error()
   report.Attempts=append(report.Attempts,attempt)
+  report.FailureCount++
   if ctx.Err()!=nil{
    report.Status="timeout"
    return report
   }
  }
- report.Status="connect_error"
+ if allIPs&&report.SuccessCount>0{
+  if report.FailureCount>0{report.Status="partial_failure"
+  }else{report.Status="connected"}
+ }else{report.Status="connect_error"}
  return report
 }
 func tcpHelp(){
- fmt.Println("用法: netkit tcp [-timeout 5s] [--output text|json] [-lang zh|en] HOST PORT")
+ fmt.Println("用法: netkit tcp [-timeout 5s] [-all-ips] [--output text|json] [-lang zh|en] HOST PORT")
  fmt.Println("示例: netkit tcp example.com 443")
  fmt.Println("      netkit tcp -timeout 3s --output json 127.0.0.1 5432")
+ fmt.Println("      netkit tcp -all-ips example.com 443")
  fmt.Println("仅尝试 TCP 连接，不执行 TLS 握手或 HTTP 请求；检测位置为运行本命令的机器")
 }
 func runTCP(args []string)error{
  if len(args)==0||args[0]=="-h"||args[0]=="--help"{tcpHelp();return nil}
  fs:=flag.NewFlagSet("tcp",flag.ContinueOnError)
  timeout:=fs.Duration("timeout",5*time.Second,"total DNS + TCP timeout")
+ allIPs:=fs.Bool("all-ips",false,"probe every resolved IP within the overall timeout")
  output:=fs.String("output","text","text or json")
  lang:=fs.String("lang","zh","zh or en")
  if err:=fs.Parse(args);err!=nil{return err}
@@ -128,7 +142,7 @@ func runTCP(args []string)error{
  host:=strings.TrimSuffix(fs.Arg(0),".")
  ctx,cancel:=context.WithTimeout(context.Background(),*timeout)
  defer cancel()
- r:=probeTCP(ctx,host,port,nil)
+ r:=probeTCPMode(ctx,host,port,nil,*allIPs)
  if format=="json"{
   b,err:=json.MarshalIndent(r,"","  ");if err!=nil{return err}
   fmt.Println(string(b))
@@ -147,6 +161,7 @@ func runTCP(args []string)error{
    if attempt.Error!=""{fmt.Printf("    %s: %s\n",name("原因","Reason"),attempt.Error)}
   }
   fmt.Printf("%s: %s | %s: %dms\n",name("结果","Result"),r.Status,name("总耗时","Total"),r.TotalDurationMS)
+  if r.AllIPs{fmt.Printf("  %s: %d | %s: %d\n",name("成功","Success"),r.SuccessCount,name("失败","Failed"),r.FailureCount)}
  }
  if r.Status!="connected"{return fmt.Errorf("TCP diagnostic: %s",r.Status)}
  return nil
