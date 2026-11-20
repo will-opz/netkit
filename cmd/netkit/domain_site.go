@@ -5,7 +5,6 @@ import (
  "fmt"
  "net"
  "net/http"
- "sort"
  "strings"
  "sync"
  "time"
@@ -157,21 +156,16 @@ func checkWebsiteHost(name string,timeout time.Duration) WebsiteCheck{
  result=probeWebsite(ctx,client,name)
  wg.Wait()
  result.CNAME=cname
- var headers http.Header
- if result.Reachable{
-  // probeWebsite has already classified response headers; preserve that
-  // evidence while incorporating the DNS CNAME.
-  if result.CDN.Provider!=""{
-   headers=make(http.Header)
-   // Determine combined results without inventing headers.
-   cnameProvider:=knownCDNCNAME(cname)
-   if cnameProvider!=""&&cnameProvider!=result.CDN.Provider{
-    result.CDN=CDNInfo{Confidence:"conflict",Evidence:append([]string{"CNAME: "+cname},result.CDN.Evidence...)}
-   }else if cnameProvider!=""{
-    result.CDN=CDNInfo{Provider:cnameProvider,Confidence:"cname",Evidence:append([]string{"CNAME: "+cname},result.CDN.Evidence...)}
-   }
-  }else{result.CDN=detectCDN(cname,headers)}
- }else{result.CDN=detectCDN(cname,nil)}
+ if result.CDN.Provider!="" {
+  cnameProvider:=knownCDNCNAME(cname)
+  if cnameProvider!=""&&cnameProvider!=result.CDN.Provider {
+   result.CDN=CDNInfo{Confidence:"conflict",Evidence:append([]string{"CNAME: "+cname},result.CDN.Evidence...)}
+  }else if cnameProvider!="" {
+   result.CDN=CDNInfo{Provider:cnameProvider,Confidence:"cname",Evidence:append([]string{"CNAME: "+cname},result.CDN.Evidence...)}
+  }
+ }else{
+  result.CDN=detectCDN(cname,nil)
+ }
  return result
 }
 
@@ -231,4 +225,3 @@ func formatWebsiteReport(results []WebsiteCheck,lang string)string{
  }
  return out.String()
 }
-func sortCDNEvidence(e []string)[]string{out:=append([]string{},e...);sort.Strings(out);return out}
