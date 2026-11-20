@@ -221,10 +221,14 @@ func runDiagnose(args []string)error{
  defer cancel()
  result:=diagnose(ctx,plan,*timeout,defaultDiagnosticProbes())
  if *ai{
-  settings:=settingsFromEnvironment()
-  settings.AllowPrivate=*allowPrivate
-  analysis,err:=analyzeWithAI(context.Background(),result,settings,nil)
-  if err!=nil{result.AIError=err.Error()}else{result.AIAnalysis=analysis}
+  settings,settingsErr:=loadAISettings()
+  if settingsErr!=nil{
+   result.AIError=settingsErr.Error()
+  }else{
+   settings.AllowPrivate=*allowPrivate
+   analysis,err:=analyzeWithAI(context.Background(),result,settings,nil)
+   if err!=nil{result.AIError=err.Error()}else{result.AIAnalysis=analysis}
+  }
  }
  if format=="json"{
   b,err:=json.MarshalIndent(result,"","  ")
