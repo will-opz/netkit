@@ -5,6 +5,7 @@ import (
  "errors"
  "io"
  "net/http"
+ "net/http/httptest"
  "strings"
  "testing"
  "time"
@@ -86,4 +87,17 @@ func TestHTTPTimeoutAndNetworkError(t *testing.T){
  <-ctx.Done()
  r=traceHTTP(ctx,client,"https://example.com/",5)
  if r.Status!="network_error"{t.Fatalf("expected context cancellation: %+v",r)}
+}
+
+func TestHTTPDeadlineHasTimeoutStatus(t *testing.T){
+ slow:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  time.Sleep(50*time.Millisecond)
+  w.WriteHeader(200)
+ }))
+ defer slow.Close()
+ client:=&http.Client{Timeout:10*time.Millisecond}
+ r:=traceHTTP(context.Background(),client,slow.URL,0)
+ if r.Status!="timeout"||r.Error==""||len(r.Hops)!=0{
+  t.Fatalf("expected distinct HTTP timeout: %+v",r)
+ }
 }
