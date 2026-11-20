@@ -111,6 +111,7 @@ func dnsHelp() {
  fmt.Println("  netkit dns           本机 DNS 配置")
  fmt.Println("  netkit dns list      常见公共 DNS（静态目录，非实时测速）")
  fmt.Println("  netkit dns compare baidu.com  比较系统、Cloudflare、Google 解析结果")
+ fmt.Println("  netkit dns compare -detail -type A baidu.com  附加公共 DoH RCODE/TTL 对比")
  fmt.Println("  netkit dns query -type SOA example.com  查询 RCODE/TTL/原始记录（DoH）")
 }
 func runDNS(args []string)error{
@@ -124,11 +125,13 @@ func runDNS(args []string)error{
  output:=fs.String("output","text","text/json")
  lang:=fs.String("lang","zh","zh/en")
  timeout:=fs.Duration("timeout",5*time.Second,"query timeout")
+ detail:=fs.Bool("detail",false,"add DoH RCODE, answer and TTL comparison")
+ recordType:=fs.String("type","A","DoH detailed record type")
  if err:=fs.Parse(args);err!=nil{return err}
  if comparing {if fs.NArg()!=1{return fmt.Errorf("dns compare requires one domain")}} else if fs.NArg()!=0{return fmt.Errorf("dns: unexpected argument %q",fs.Arg(0))}
  format,err:=resolveOutputFormat(*output,false);if err!=nil{return err}
  if *lang!="zh"&&*lang!="en"{return errors.New("lang must be zh or en")}
- if comparing{return runDNSCompare(fs.Arg(0),*timeout,format,*lang)}
+ if comparing{return runDNSCompare(fs.Arg(0),*timeout,format,*lang,*detail,*recordType)}
  if listing{
   if format=="json"{b,_:=json.MarshalIndent(publicDNS,"","  ");fmt.Println(string(b));return nil}
   fmt.Println("公共 DNS / Public DNS (static reference)")
