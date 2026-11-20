@@ -52,7 +52,13 @@ type Agreement struct {
  Sources []string `json:"sources,omitempty"`
  Alternatives map[string][]string `json:"alternatives,omitempty"`
 }
+type LocationCandidate struct {
+ Region string `json:"region,omitempty"`
+ City string `json:"city,omitempty"`
+ Sources []string `json:"sources,omitempty"`
+}
 type Summary struct {
+ Locations []LocationCandidate `json:"locations,omitempty"`
  Country string `json:"country,omitempty"`
  Region string `json:"region,omitempty"`
  City string `json:"city,omitempty"`
@@ -328,8 +334,39 @@ func vote(sources []Source,key string)Agreement {
  }
  return a
 }
+// Group region/city pairs from the SAME provider. Never construct a location
+// by combining the winning region from one API with the city from another.
+func collectLocations(sources []Source) []LocationCandidate {
+ result:=[]LocationCandidate{}
+ seen:=map[string]int{}
+ for _,src:=range sources {
+  if src.Error!="" {continue}
+  region,city:=strings.TrimSpace(field(src,"region")),strings.TrimSpace(field(src,"city"))
+  if region==""&&city=="" {continue}
+  key:=strings.ToLower(region)+"\x00"+strings.ToLower(city)
+  if index,ok:=seen[key];ok {
+   result[index].Sources=append(result[index].Sources,src.Name)
+  }else{
+   seen[key]=len(result)
+   result=append(result,LocationCandidate{Region:region,City:city,Sources:[]string{src.Name}})
+  }
+ }
+ // Prefer most frequently observed pairs, retaining provider order on ties.
+ sort.SliceStable(result,func(i,j int)bool{return len(result[i].Sources)>len(result[j].Sources)})
+ return result
+}
+func locationLabels(locations []LocationCandidate) []string {
+ labels:=make([]string,0,len(locations))
+ for _,loc:=range locations {
+  if loc.Region!=""&&loc.City!="" {
+   if strings.EqualFold(loc.Region,loc.City){labels=append(labels,loc.City)
+   }else{labels=append(labels,loc.Region+"/"+loc.City)}
+  }else{labels=append(labels,first(loc.Region,loc.City))}
+ }
+ return labels
+}
 func aggregate(sources []Source,w Registry)Summary {
- s:=Summary{RegisteredCountry:w.Country,Network:first(w.CIDR,w.Range),AbuseEmail:w.AbuseEmail}
+ s:=Summary{RegisteredCountry:w.Country,Network:first(w.CIDR,w.Range),AbuseEmail:w.AbuseEmail,Locations:collectLocations(sources)}
  keys:=[]string{"country","region","city","asn","isp","organization"}
  for _,k:=range keys {
   a:=vote(sources,k)
@@ -455,7 +492,7 @@ func printResult(r Result,all,whoisOnly bool,lang string){
  if r.Scope!="" && r.Scope!="public" {fmt.Println("  "+translate(lang,"addressType")+": "+scopeLabel(lang,r.Scope));return}
  s:=r.Summary
  items:=[][2]string{
-  {translate(lang,"country"),countryName(lang,s.Country)}, {translate(lang,"region"),s.Region},{translate(lang,"city"),s.City},{"ISP",s.ISP},
+  {translate(lang,"country"),countryName(lang,s.Country)}, {translate(lang,"locations"),strings.Join(locationLabels(s.Locations),"、")},{"ISP",s.ISP},
   {translate(lang,"organization"),s.Organization},{"ASN",s.ASN},{translate(lang,"timezone"),s.Timezone},
   {translate(lang,"registeredCountry"),countryName(lang,s.RegisteredCountry)},{translate(lang,"network"),s.Network},{translate(lang,"abuseEmail"),s.AbuseEmail},
  }
@@ -495,7 +532,7 @@ var messages = map[string]map[string]string{
   "whoisError":"WHOIS 错误","whoisRaw":"WHOIS 原始数据","error":"错误",
   "yes":"是","no":"否","unknown":"未知","unavailable":"不可用",
   "sources":"数据源","geoDifference":"GeoIP 差异","sourceFailure":"GeoIP 全部失败",
-  "addressType":"地址类型","localNoQuery":"跳过公网 GeoIP/WHOIS","host":"主机名","localIP":"本机出口内网 IP","interfaces":"网络接口","gateways":"默认网关","publicIP":"公网 IP","publicDetail":"公网信息","warnings":"提示","unavailableGW":"未能检测默认网关","networkOverview":"本机网络概览","hiddenInterfaces":"已隐藏 %d 个其他接口（-all 查看）",
+  "addressType":"地址类型","localNoQuery":"跳过公网 GeoIP/WHOIS","host":"主机名","localIP":"本机出口内网 IP","interfaces":"网络接口","gateways":"默认网关","publicIP":"公网 IP","publicDetail":"公网信息","warnings":"提示","unavailableGW":"未能检测默认网关","locations":"地点候选","networkOverview":"本机网络概览","hiddenInterfaces":"已隐藏 %d 个其他接口（-all 查看）",
  },
  "en": {
   "country":"Country","region":"Region","city":"City","organization":"Organization","timezone":"Timezone",
@@ -505,7 +542,7 @@ var messages = map[string]map[string]string{
   "whoisError":"WHOIS error","whoisRaw":"WHOIS raw","error":"Error",
   "yes":"Yes","no":"No","unknown":"Unknown","unavailable":"N/A",
   "sources":"Sources","geoDifference":"GeoIP mismatch","sourceFailure":"All GeoIP sources failed",
-  "addressType":"Address type","localNoQuery":"Public GeoIP/WHOIS skipped","host":"Hostname","localIP":"Local outbound IP","interfaces":"Interfaces","gateways":"Default gateways","publicIP":"Public IP","publicDetail":"Public details","warnings":"Warnings","unavailableGW":"Default gateway unavailable","networkOverview":"Local network overview","hiddenInterfaces":"%d additional interfaces hidden (use -all)",
+  "addressType":"Address type","localNoQuery":"Public GeoIP/WHOIS skipped","host":"Hostname","localIP":"Local outbound IP","interfaces":"Interfaces","gateways":"Default gateways","publicIP":"Public IP","publicDetail":"Public details","warnings":"Warnings","unavailableGW":"Default gateway unavailable","locations":"Locations","networkOverview":"Local network overview","hiddenInterfaces":"%d additional interfaces hidden (use -all)",
  },
 }
 func translate(lang,key string)string {
@@ -552,13 +589,18 @@ func compactLine(r Result,whoisOnly bool,lang string)string {
  ok:=0
  for _,source:=range r.Sources {if source.Error=="" {ok++}}
  differences:=[]string{}
- for _,key:=range []string{"country","region","city","asn"} {
+ for _,key:=range []string{"country","asn"} {
   a,exists:=s.Agreements[key]
   if exists&&len(a.Alternatives)>0 {differences=append(differences,translate(lang,key))}
  }
  line:=fmt.Sprintf("%s | %s | %s | %s | %s: %s | %s: %d/%d | WHOIS: %s",
   r.IP,cleanDisplay(countryName(lang,country)),cleanDisplay(s.ASN),cleanDisplay(s.Organization),
   translate(lang,"hosting"),hosting,translate(lang,"sources"),ok,len(r.Sources),whoisStatus)
+ if len(s.Locations)>0 {
+  sep:="、"
+  if lang=="en" {sep="; "}
+  line+=" | "+translate(lang,"locations")+": "+strings.Join(locationLabels(s.Locations),sep)
+ }
  if len(differences)>0 {line+=" | "+translate(lang,"geoDifference")+": "+strings.Join(differences,",")}
  if ok==0 {line+=" | "+translate(lang,"sourceFailure")}
  return line
