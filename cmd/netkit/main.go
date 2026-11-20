@@ -11,6 +11,11 @@ import (
  "net/http"
  "net/url"
  "os"
+ "os/exec"
+ "path/filepath"
+ "runtime"
+ "encoding/binary"
+ "encoding/hex"
  "sort"
  "strconv"
  "strings"
@@ -64,9 +69,30 @@ type Summary struct {
 }
 type Result struct {
  IP string `json:"ip"`
+ Scope string `json:"scope,omitempty"`
  Summary Summary `json:"summary"`
  Sources []Source `json:"sources,omitempty"`
  Whois Registry `json:"whois"`
+}
+
+type InterfaceInfo struct {
+ Name string `json:"name"`
+ Addresses []string `json:"addresses"`
+ Flags string `json:"flags,omitempty"`
+}
+type GatewayInfo struct {
+ Family string `json:"family"`
+ Gateway string `json:"gateway"`
+ Interface string `json:"interface,omitempty"`
+}
+type LocalReport struct {
+ Hostname string `json:"hostname,omitempty"`
+ LocalIP string `json:"local_ip,omitempty"`
+ Interfaces []InterfaceInfo `json:"interfaces"`
+ Gateways []GatewayInfo `json:"gateways"`
+ PublicIP string `json:"public_ip,omitempty"`
+ Public *Result `json:"public,omitempty"`
+ Warnings []string `json:"warnings,omitempty"`
 }
 
 type provider struct { name, endpoint string }
@@ -108,9 +134,15 @@ func main() {
  client := &http.Client{Transport: &http.Transport{Proxy:http.ProxyFromEnvironment, MaxIdleConns:16, IdleConnTimeout:30*time.Second}}
  ips := flag.Args()
  if len(ips)==0 {
-  ip,err := publicIP(client,*timeout)
-  if err!=nil {fmt.Fprintln(os.Stderr,"公网 IP 检测失败:",err);os.Exit(1)}
-  ips=[]string{ip}
+  report:=inspectLocal(client,*timeout,*whoisOnly)
+  if *jsonFlag {
+   b,err:=json.MarshalIndent(report,"","  ")
+   if err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(1)}
+   fmt.Println(string(b))
+  } else {
+   printLocal(report,*lang,*all,*whoisOnly)
+  }
+  return
  }
  results:=make([]Result,0,len(ips))
  seen:=map[string]bool{}
@@ -162,6 +194,8 @@ func publicIP(client *http.Client,timeout time.Duration)(string,error){
 }
 func lookup(client *http.Client,ip string,timeout time.Duration,whoisOnly bool) Result {
  r:=Result{IP:ip}
+ r.Scope=ipScope(net.ParseIP(ip))
+ if r.Scope!="public" {return r}
  if whoisOnly {
   r.Whois=queryWhois(ip,timeout)
   r.Summary=aggregate(nil,r.Whois)
@@ -411,6 +445,7 @@ func queryWhois(ip string,timeout time.Duration)Registry {
 }
 func printResult(r Result,all,whoisOnly bool,lang string){
  fmt.Printf("\nIP: %s\n",r.IP)
+ if r.Scope!="" && r.Scope!="public" {fmt.Println("  "+translate(lang,"addressType")+": "+scopeLabel(lang,r.Scope));return}
  s:=r.Summary
  items:=[][2]string{
   {translate(lang,"country"),countryName(lang,s.Country)}, {translate(lang,"region"),s.Region},{translate(lang,"city"),s.City},{"ISP",s.ISP},
@@ -453,6 +488,7 @@ var messages = map[string]map[string]string{
   "whoisError":"WHOIS 错误","whoisRaw":"WHOIS 原始数据","error":"错误",
   "yes":"是","no":"否","unknown":"未知","unavailable":"不可用",
   "sources":"数据源","geoDifference":"GeoIP 差异","sourceFailure":"GeoIP 全部失败",
+  "addressType":"地址类型","localNoQuery":"跳过公网 GeoIP/WHOIS","host":"主机名","localIP":"本机出口内网 IP","interfaces":"网络接口","gateways":"默认网关","publicIP":"公网 IP","publicDetail":"公网信息","warnings":"提示","unavailableGW":"未能检测默认网关",
  },
  "en": {
   "country":"Country","region":"Region","city":"City","organization":"Organization","timezone":"Timezone",
@@ -462,6 +498,7 @@ var messages = map[string]map[string]string{
   "whoisError":"WHOIS error","whoisRaw":"WHOIS raw","error":"Error",
   "yes":"Yes","no":"No","unknown":"Unknown","unavailable":"N/A",
   "sources":"Sources","geoDifference":"GeoIP mismatch","sourceFailure":"All GeoIP sources failed",
+  "addressType":"Address type","localNoQuery":"Public GeoIP/WHOIS skipped","host":"Hostname","localIP":"Local outbound IP","interfaces":"Interfaces","gateways":"Default gateways","publicIP":"Public IP","publicDetail":"Public details","warnings":"Warnings","unavailableGW":"Default gateway unavailable",
  },
 }
 func translate(lang,key string)string {
@@ -491,6 +528,7 @@ func cleanDisplay(v string)string {
  return strings.Join(strings.Fields(v)," ")
 }
 func compactLine(r Result,whoisOnly bool,lang string)string {
+ if r.Scope!="" && r.Scope!="public" {return r.IP+" | "+translate(lang,"addressType")+": "+scopeLabel(lang,r.Scope)+" | "+translate(lang,"localNoQuery")}
  s:=r.Summary
  country:=s.Country
  if whoisOnly {country=s.RegisteredCountry}
@@ -520,4 +558,183 @@ func compactLine(r Result,whoisOnly bool,lang string)string {
 }
 func printCompact(r Result,whoisOnly bool,lang string) {
  fmt.Println(compactLine(r,whoisOnly,lang))
+}
+
+// ipScope classifies special-purpose networks before contacting any remote
+// GeoIP/WHOIS provider. IsGlobalUnicast alone is insufficient: for example,
+// RFC 6598 shared and RFC 5737 documentation addresses pass that test.
+var specialRanges = []struct{network,scope string}{
+ {"100.64.0.0/10","shared"}, {"192.0.0.0/24","reserved"},
+ {"192.0.2.0/24","documentation"},{"198.51.100.0/24","documentation"},
+ {"203.0.113.0/24","documentation"},{"198.18.0.0/15","benchmark"},
+ {"240.0.0.0/4","reserved"},{"0.0.0.0/8","reserved"},
+ {"2001:db8::/32","documentation"},{"2001:10::/28","reserved"},
+ {"2001::/32","reserved"},
+}
+func ipScope(ip net.IP)string {
+ if ip==nil{return "invalid"}
+ if ip.IsUnspecified(){return "unspecified"}
+ if ip.IsLoopback(){return "loopback"}
+ if ip.IsLinkLocalUnicast(){return "linklocal"}
+ if ip.IsMulticast(){return "multicast"}
+ if ip.IsPrivate(){return "private"}
+ for _,item:=range specialRanges {
+  _,subnet,_:=net.ParseCIDR(item.network)
+  if subnet.Contains(ip){return item.scope}
+ }
+ if !ip.IsGlobalUnicast(){return "reserved"}
+ return "public"
+}
+var scopeNames=map[string][2]string{
+ "public":{"公网 IP","Public IP"},
+ "private":{"私有内网 IP","Private LAN IP"},
+ "shared":{"运营商共享地址 (CGNAT)","Shared address (CGNAT)"},
+ "loopback":{"回环地址","Loopback"},
+ "linklocal":{"链路本地地址","Link-local"},
+ "documentation":{"文档保留地址","Documentation range"},
+ "benchmark":{"测试保留地址","Benchmark range"},
+ "multicast":{"组播地址","Multicast"},
+ "unspecified":{"未指定地址","Unspecified"},
+ "reserved":{"特殊保留地址","Reserved range"},
+ "invalid":{"无效 IP","Invalid IP"},
+}
+func scopeLabel(lang,scope string)string {
+ pair,ok:=scopeNames[scope]
+ if !ok{return scope}
+ if lang=="en"{return pair[1]}
+ return pair[0]
+}
+
+// parseLinuxRoute reads the kernel route table directly, without requiring
+// external commands or privileges. Only default routes with the gateway bit
+// set are considered, and the lowest metric wins.
+func parseLinuxRoute(text string)GatewayInfo {
+ var chosen GatewayInfo
+ bestMetric:=int64(1<<62)
+ for _,line:=range strings.Split(text,"\n") {
+  f:=strings.Fields(line)
+  if len(f)<8 || f[1]!="00000000" || f[7]!="00000000" {continue}
+  flags,err1:=strconv.ParseUint(f[3],16,32)
+  metric,err2:=strconv.ParseInt(f[6],10,64)
+  value,err3:=strconv.ParseUint(f[2],16,32)
+  if err1!=nil||err2!=nil||err3!=nil||(flags&0x3)!=0x3 {continue}
+  if metric<bestMetric{
+   var buf [4]byte
+   binary.LittleEndian.PutUint32(buf[:],uint32(value))
+   chosen=GatewayInfo{Family:"IPv4",Gateway:net.IP(buf[:]).String(),Interface:f[0]}
+   bestMetric=metric
+  }
+ }
+ return chosen
+}
+func parseLinuxIPv6Route(text string)GatewayInfo {
+ var chosen GatewayInfo
+ bestMetric:=uint64(^uint32(0))
+ for _,line:=range strings.Split(text,"\n") {
+  f:=strings.Fields(line)
+  if len(f)<10||f[0]!=strings.Repeat("0",32)||f[1]!="00"||f[2]!=strings.Repeat("0",32)||f[3]!="00" {continue}
+  flags,err1:=strconv.ParseUint(f[8],16,32)
+  metric,err2:=strconv.ParseUint(f[5],16,32)
+  ipBytes,err3:=hex.DecodeString(f[4])
+  if err1!=nil||err2!=nil||err3!=nil||len(ipBytes)!=16||(flags&0x3)!=0x3{continue}
+  if metric<bestMetric {
+   chosen=GatewayInfo{Family:"IPv6",Gateway:net.IP(ipBytes).String(),Interface:f[9]}
+   bestMetric=metric
+  }
+ }
+ return chosen
+}
+func parseRouteGet(text,family string)GatewayInfo {
+ g:=GatewayInfo{Family:family}
+ for _,line:=range strings.Split(text,"\n") {
+  key,val,ok:=strings.Cut(strings.TrimSpace(line),":")
+  if !ok {continue}
+  switch strings.TrimSpace(key){
+  case "gateway":g.Gateway=strings.TrimSpace(val)
+  case "interface":g.Interface=strings.TrimSpace(val)
+  }
+ }
+ if ip:=net.ParseIP(strings.Split(g.Gateway,"%")[0]);ip==nil{return GatewayInfo{}}
+ return g
+}
+func defaultGateways()([]GatewayInfo,[]string){
+ results:=[]GatewayInfo{}
+ notes:=[]string{}
+ if runtime.GOOS=="linux" {
+  for _,table:=range []struct{path string; parse func(string)GatewayInfo}{
+   {"/proc/net/route",parseLinuxRoute},{"/proc/net/ipv6_route",parseLinuxIPv6Route},
+  }{
+   raw,err:=os.ReadFile(table.path)
+   if err!=nil {notes=append(notes,filepath.Base(table.path)+": "+err.Error());continue}
+   g:=table.parse(string(raw))
+   if g.Gateway!="" {results=append(results,g)}
+  }
+ } else if runtime.GOOS=="darwin" {
+  for _,kind:=range []struct{args []string;family string}{
+   {[]string{"-n","get","default"},"IPv4"},
+   {[]string{"-n","get","-inet6","default"},"IPv6"},
+  } {
+   ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
+   out,err:=exec.CommandContext(ctx,"route",kind.args...).Output()
+   cancel()
+   if err!=nil {continue}
+   if g:=parseRouteGet(string(out),kind.family);g.Gateway!="" {results=append(results,g)}
+  }
+ }else {
+  notes=append(notes,"Default gateway detection unsupported on "+runtime.GOOS)
+ }
+ return results,notes
+}
+func preferredLocalIP()string{
+ for _,network:=range []string{"udp4","udp6"} {
+  dest:="8.8.8.8:53"
+  if network=="udp6"{dest="[2001:4860:4860::8888]:53"}
+  conn,err:=net.DialTimeout(network,dest,time.Second)
+  if err!=nil{continue}
+  addr,ok:=conn.LocalAddr().(*net.UDPAddr)
+  conn.Close()
+  if ok&&addr.IP!=nil&&!addr.IP.IsLoopback() {return addr.IP.String()}
+ }
+ return ""
+}
+func inspectLocal(client *http.Client,timeout time.Duration,whoisOnly bool)LocalReport {
+ report:=LocalReport{Interfaces:[]InterfaceInfo{},Gateways:[]GatewayInfo{}}
+ report.Hostname,_=os.Hostname()
+ report.LocalIP=preferredLocalIP()
+ interfaces,err:=net.Interfaces()
+ if err!=nil {report.Warnings=append(report.Warnings,err.Error())}
+ for _,iface:=range interfaces{
+  if iface.Flags&net.FlagUp==0||iface.Flags&net.FlagLoopback!=0{continue}
+  addrs,err:=iface.Addrs()
+  if err!=nil {report.Warnings=append(report.Warnings,iface.Name+": "+err.Error());continue}
+  item:=InterfaceInfo{Name:iface.Name,Flags:iface.Flags.String(),Addresses:[]string{}}
+  for _,addr:=range addrs {item.Addresses=append(item.Addresses,addr.String())}
+  if len(item.Addresses)>0 {report.Interfaces=append(report.Interfaces,item)}
+ }
+ gateways,errNotes:=defaultGateways()\n report.Gateways=gateways
+ report.Warnings=append(report.Warnings,errNotes...)
+ public,err:=publicIP(client,timeout)
+ if err!=nil {report.Warnings=append(report.Warnings,"public IP: "+err.Error());return report}
+ report.PublicIP=public
+ r:=lookup(client,public,timeout,whoisOnly)
+ report.Public=&r
+ return report
+}
+// Keep gateway diagnostics isolated from interface enumeration.
+func localGatewayWrapper()([]GatewayInfo,[]string){return defaultGateways()}
+func printLocal(r LocalReport,lang string,all,whoisOnly bool) {
+ fmt.Printf("%s: %s\n",translate(lang,"host"),cleanDisplay(r.Hostname))
+ fmt.Printf("%s: %s\n",translate(lang,"localIP"),cleanDisplay(r.LocalIP))
+ fmt.Printf("%s:\n",translate(lang,"interfaces"))
+ for _,iface:=range r.Interfaces {
+  fmt.Printf("  %s: %s\n",iface.Name,strings.Join(iface.Addresses,", "))
+ }
+ fmt.Printf("%s:\n",translate(lang,"gateways"))
+ if len(r.Gateways)==0 {fmt.Println("  "+translate(lang,"unavailableGW"))}
+ for _,gw:=range r.Gateways {fmt.Printf("  %s: %s (%s)\n",gw.Family,gw.Gateway,gw.Interface)}
+ fmt.Printf("%s: %s\n",translate(lang,"publicIP"),cleanDisplay(r.PublicIP))
+ if r.Public!=nil {
+  if all {printResult(*r.Public,true,whoisOnly,lang)}else{printCompact(*r.Public,whoisOnly,lang)}
+ }
+ for _,warning:=range r.Warnings {fmt.Fprintln(os.Stderr,translate(lang,"warnings")+": "+warning)}
 }
