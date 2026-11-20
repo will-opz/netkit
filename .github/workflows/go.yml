@@ -37,6 +37,7 @@ jobs:
           /tmp/netkit tcp -h
           /tmp/netkit tcp -all-ips --output json 127.0.0.1 1 > /tmp/tcp-all.json || test $? -eq 2
           /tmp/netkit dns query -h
+          /tmp/netkit dns compare -h
           /tmp/netkit dns list --output json > /tmp/public-dns.json
           /tmp/netkit ip -cidr 192.168.31.158/24 > /tmp/cidr.txt
           /tmp/netkit ip 192.168.1.1 > /tmp/private.txt
