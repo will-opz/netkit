@@ -2,6 +2,8 @@ package main
 
 import (
  "reflect"
+ "net"
+ "errors"
  "strings"
  "testing"
 )
@@ -43,4 +45,11 @@ func TestScutilResolvers(t *testing.T){
 }
 func TestPublicDNSServerList(t *testing.T){
  for _,p:=range publicDNS {if p.Name==""||len(p.IPv4)==0||len(p.IPv6)==0 {t.Fatalf("invalid DNS provider: %+v",p)}}
+}
+
+func TestOptionalDNSRecordMissing(t *testing.T){
+ missing:=&net.DNSError{Err:"no such host",IsNotFound:true}
+ if !isOptionalRecordMissing("MX",missing)||!isOptionalRecordMissing("TXT",missing) {t.Fatal("expected missing optional records to be ignored")}
+ if isOptionalRecordMissing("A/AAAA",missing) {t.Fatal("missing A/AAAA should remain visible")}
+ if isOptionalRecordMissing("MX",errors.New("timeout")) {t.Fatal("unexpected timeout suppression")}
 }
