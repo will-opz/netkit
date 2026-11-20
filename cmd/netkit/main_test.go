@@ -204,3 +204,24 @@ func TestGlobalOutputCommand(t *testing.T){
   if !reflect.DeepEqual(got,tc.want){t.Errorf("got %v, want %v",got,tc.want)}
  }
 }
+
+func TestBilingualLocationDedup(t *testing.T) {
+ sources:=[]Source{
+  {Name:"ip-api.com",Data:map[string]any{"regionName":"California","city":"Mountain View"}},
+  {Name:"ipwho.is",Data:map[string]any{"region":"加利福尼亚州","city":"山景城"}},
+  {Name:"ipinfo.io",Data:map[string]any{"region":"Virginia","city":"Ashburn"}},
+  {Name:"api.ip.sb",Data:map[string]any{"region":"弗吉尼亚州","city":"阿什本"}},
+ }
+ locations:=collectLocations(sources)
+ if len(locations)!=2{t.Fatalf("expected 2 normalized locations: %+v",locations)}
+ if len(locations[0].Sources)!=2||len(locations[1].Sources)!=2 {t.Fatalf("lost attribution: %+v",locations)}
+ zh:=strings.Join(locationLabelsLang(locations,"zh"),"、")
+ en:=strings.Join(locationLabelsLang(locations,"en"),"; ")
+ if zh!="加利福尼亚州/山景城、弗吉尼亚州/阿什本" {t.Fatalf("zh: %s",zh)}
+ if en!="California/Mountain View; Virginia/Ashburn" {t.Fatalf("en: %s",en)}
+ if locations[0].Region!="California"||locations[1].City!="Ashburn"{t.Fatalf("provider originals overwritten: %+v",locations)}
+}
+func TestGeolocationUnknownNamesPreserved(t *testing.T){
+ loc:=LocationCandidate{Region:"Example Region",City:"Example City"}
+ if displayLocation(loc,"zh")!="Example Region/Example City" {t.Fatal("unknown aliases must be preserved")}
+}
