@@ -7,6 +7,7 @@ import (
  "flag"
  "fmt"
  "net"
+ "net/http"
  "os"
  "strings"
  "sync"
@@ -22,6 +23,7 @@ type DomainReport struct {
  MX []string `json:"mx,omitempty"`
  NS []string `json:"ns,omitempty"`
  TXT []string `json:"txt,omitempty"`
+ Registration *DomainRegistration `json:"registration,omitempty"`
  Errors map[string]string `json:"errors,omitempty"`
 }
 
@@ -110,7 +112,8 @@ func queryDomain(domain string,timeout time.Duration)DomainReport{
 var domainErrorMu sync.Mutex
 
 func domainHelp(){
- fmt.Println("用法: netkit domain [--output text|json] [-lang zh|en] [-timeout 5s] <domain>")
+ fmt.Println("用法: netkit domain [--output text|json] [-lang zh|en] [-timeout 5s] [-no-rdap] <domain>")
+ fmt.Println("默认通过 RDAP 查询注册商、注册时间、到期时间及状态；-no-rdap 跳过注册信息")
  fmt.Println("示例: netkit domain www.baidu.com")
  fmt.Println("      netkit www.baidu.com")
 }
@@ -120,12 +123,20 @@ func runDomain(args []string)error{
  output:=fs.String("output","text","text/json")
  lang:=fs.String("lang","zh","zh/en")
  timeout:=fs.Duration("timeout",5*time.Second,"query timeout")
+ noRDAP:=fs.Bool("no-rdap",false,"skip domain registration RDAP query")
  if err:=fs.Parse(args);err!=nil{return err}
  if *lang!="zh"&&*lang!="en"{return fmt.Errorf("lang must be zh or en")}
  if *timeout<=0{return fmt.Errorf("timeout must be positive")}
  format,err:=resolveOutputFormat(*output,false);if err!=nil{return err}
  if fs.NArg()!=1||!validDomain(fs.Arg(0)){return fmt.Errorf("expected one valid ASCII domain, got %q",strings.Join(fs.Args()," "))}
- r:=queryDomain(fs.Arg(0),*timeout)
+ var r DomainReport
+ var registration DomainRegistration
+ var wg sync.WaitGroup
+ wg.Add(1)
+ go func(){defer wg.Done();r=queryDomain(fs.Arg(0),*timeout)}()
+ if !*noRDAP {wg.Add(1);go func(){defer wg.Done();registration=fetchDomainRegistration(&http.Client{Timeout:3*(*timeout)},fs.Arg(0),*timeout)}()}
+ wg.Wait()
+ if !*noRDAP{r.Registration=&registration}
  if format=="json"{b,_:=json.MarshalIndent(r,"","  ");fmt.Println(string(b));return nil}
  fmt.Printf("%s: %s\n",map[bool]string{true:"域名",false:"Domain"}[*lang=="zh"],r.Domain)
  printEntries:=func(kind string,values []string){
@@ -134,9 +145,31 @@ func runDomain(args []string)error{
  printEntries("A",r.A);printEntries("AAAA",r.AAAA)
  if r.CNAME!="" {printEntries("CNAME",[]string{r.CNAME})}
  printEntries("MX",r.MX);printEntries("NS",r.NS);printEntries("TXT",r.TXT)
+ if r.Registration!=nil {fmt.Print(formatDomainRegistration(*r.Registration,*lang))}
  if len(r.Errors)>0 {
   fmt.Fprintln(os.Stderr,"DNS 部分记录不可用 / some lookups failed:")
   for key,err:=range r.Errors{fmt.Fprintln(os.Stderr," ",key,":",err)}
  }
  return nil
+}
+
+func formatDomainRegistration(r DomainRegistration,lang string)string{
+ label:=func(zh,en string)string{if lang=="en"{return en};return zh}
+ var b strings.Builder
+ fmt.Fprintf(&b,"\n%s (RDAP)\n",label("域名注册信息","Domain registration"))
+ if r.Error!=""{
+  fmt.Fprintf(&b,"  %s: %s\n",label("查询失败","Lookup failed"),r.Error)
+  return b.String()
+ }
+ fields:=[][2]string{
+  {label("注册域名","Registered domain"),r.Domain},
+  {label("注册商","Registrar"),r.Registrar},
+  {label("注册商 IANA ID","Registrar IANA ID"),r.RegistrarIANAID},
+  {label("注册时间","Created"),r.CreatedAt},
+  {label("更新时间","Updated"),r.UpdatedAt},
+  {label("到期时间","Expires"),r.ExpiresAt},
+  {label("域名状态","Status"),strings.Join(r.Status,", ")},
+ }
+ for _,item:=range fields{if item[1]!=""{fmt.Fprintf(&b,"  %s: %s\n",item[0],item[1])}}
+ return b.String()
 }
