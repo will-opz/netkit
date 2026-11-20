@@ -7,7 +7,7 @@ import "strings"
 var regionAliases = map[string]string{
  "california":"California","加利福尼亚州":"California","加州":"California",
  "virginia":"Virginia","弗吉尼亚州":"Virginia",
- "tokyo":"Tokyo","tokyo-to":"Tokyo","東京都":"Tokyo","东京":"Tokyo","東京都":"Tokyo",
+ "tokyo":"Tokyo","tokyo-to":"Tokyo","東京都":"Tokyo","东京":"Tokyo",
  "chiba":"Chiba","chiba prefecture":"Chiba","千葉県":"Chiba","千叶县":"Chiba",
 }
 var regionChinese = map[string]string{
