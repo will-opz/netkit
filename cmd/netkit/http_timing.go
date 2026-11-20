@@ -3,6 +3,8 @@ package main
 import (
  "context"
  "crypto/tls"
+ "fmt"
+ "strings"
  "net/http/httptrace"
  "sync"
  "time"
@@ -59,4 +61,19 @@ func (r *httpPhaseRecorder)result()HTTPPhases{
 }
 func withHTTPPhaseTrace(ctx context.Context,recorder *httpPhaseRecorder)context.Context{
  return httptrace.WithClientTrace(ctx,recorder.trace())
+}
+
+func formatHTTPPhases(p HTTPPhases,lang string)string {
+ var items []string
+ appendPhase:=func(name string,v *int64){if v!=nil{items=append(items,fmt.Sprintf("%s=%dms",name,*v))}}
+ appendPhase("DNS",p.DNSMS)
+ appendPhase("TCP",p.ConnectMS)
+ appendPhase("TLS",p.TLSMS)
+ appendPhase("TTFB",p.TTFBMS)
+ if p.ReusedConnection!=nil && *p.ReusedConnection {
+  if lang=="en"{items=append(items,"connection reused")
+  }else{items=append(items,"连接复用")}
+ }
+ if len(items)==0{return ""}
+ return "     "+strings.Join(items," | ")+"\n"
 }
