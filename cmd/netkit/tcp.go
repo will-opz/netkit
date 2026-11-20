@@ -7,6 +7,7 @@ import (
  "flag"
  "fmt"
  "net"
+ "strconv"
  "strings"
  "time"
 )
@@ -122,8 +123,8 @@ func runTCP(args []string)error{
  format,err:=resolveOutputFormat(*output,false)
  if err!=nil{return err}
  if fs.NArg()!=2||!validTCPHost(fs.Arg(0)){return errors.New("expected HOST PORT (valid hostname or IPv4/IPv6 address)")}
- port,err:=net.LookupPort("tcp",fs.Arg(1))
- if err!=nil||port<1||port>65535{return errors.New("PORT must be a valid TCP port (1-65535)")}
+ port,err:=strconv.Atoi(fs.Arg(1))
+ if err!=nil||port<1||port>65535{return errors.New("PORT must be a numeric TCP port (1-65535)")}
  host:=strings.TrimSuffix(fs.Arg(0),".")
  ctx,cancel:=context.WithTimeout(context.Background(),*timeout)
  defer cancel()
