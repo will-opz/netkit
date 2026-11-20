@@ -69,8 +69,8 @@ func TestCompactLineLanguages(t *testing.T) {
  Whois:Registry{Servers:[]string{"whois.iana.org","whois.arin.net"},CIDR:"8.8.8.0/24"}}
  zh:=compactLine(r,false,"zh")
  en:=compactLine(r,false,"en")
- if !strings.Contains(zh,"美国")||!strings.Contains(zh,"机房: 是")||!strings.Contains(zh,"数据源: 3/4")||!strings.Contains(zh,"GeoIP 差异: 地区") {t.Errorf("zh: %s",zh)}
- if !strings.Contains(en,"US")||!strings.Contains(en,"Hosting: Yes")||!strings.Contains(en,"Sources: 3/4")||!strings.Contains(en,"GeoIP mismatch: Region") {t.Errorf("en: %s",en)}
+ if !strings.Contains(zh,"美国")||!strings.Contains(zh,"机房: 是")||!strings.Contains(zh,"数据源: 3/4") {t.Errorf("zh: %s",zh)}
+ if !strings.Contains(en,"US")||!strings.Contains(en,"Hosting: Yes")||!strings.Contains(en,"Sources: 3/4") {t.Errorf("en: %s",en)}
  if strings.Contains(zh,"Difference/issue") {t.Errorf("old warning label: %s",zh)}
 }
 
@@ -150,4 +150,30 @@ func TestPrimaryInterfaceFromLocalIP(t *testing.T) {
  }
  filtered:=primaryInterfaces(r)
  if len(filtered)!=1||filtered[0].Name!="utun6" {t.Fatalf("unexpected selected interface: %+v",filtered)}
+}
+
+func TestLocationCandidatesKeepPairs(t *testing.T) {
+ sources:=[]Source{
+  {Name:"ip-api.com",Data:map[string]any{"regionName":"东京","city":"新宿"}},
+  {Name:"ipwho.is",Data:map[string]any{"region":"千叶县","city":"千叶"}},
+  {Name:"ipinfo.io",Data:map[string]any{"region":"东京","city":"新宿"}},
+  {Name:"api.ip.sb",Error:"HTTP 429"},
+ }
+ loc:=collectLocations(sources)
+ if len(loc)!=2 {t.Fatalf("expected 2 paired locations: %+v",loc)}
+ if loc[0].Region!="东京"||loc[0].City!="新宿"||len(loc[0].Sources)!=2 {t.Fatalf("unexpected majority: %+v",loc)}
+ if loc[1].Region!="千叶县"||loc[1].City!="千叶" {t.Fatalf("unexpected alternative: %+v",loc)}
+ result:=Result{IP:"8.8.8.8",Summary:aggregate(sources,Registry{}),Sources:sources}
+ line:=compactLine(result,false,"zh")
+ if !strings.Contains(line,"地点候选: 东京/新宿、千叶县/千叶") {t.Fatalf("missing paired locations: %s",line)}
+ if strings.Contains(line,"GeoIP 差异: 地区,城市") {t.Fatalf("redundant mismatch: %s",line)}
+}
+func TestLocationCandidatesMissingFields(t *testing.T){
+ loc:=collectLocations([]Source{
+  {Name:"ip-api.com",Data:map[string]any{"regionName":"California"}},
+  {Name:"ipwho.is",Data:map[string]any{"city":"Tokyo"}},
+  {Name:"ipinfo.io",Data:map[string]any{"region":"Tokyo","city":"Tokyo"}},
+ })
+ labels:=locationLabels(loc)
+ if strings.Join(labels,",")!="California,Tokyo,Tokyo" {t.Fatalf("unexpected labels: %v",labels)}
 }
