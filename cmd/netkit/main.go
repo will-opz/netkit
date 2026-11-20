@@ -391,7 +391,8 @@ func collectLocations(sources []Source) []LocationCandidate {
   if src.Error!="" {continue}
   region,city:=strings.TrimSpace(field(src,"region")),strings.TrimSpace(field(src,"city"))
   if region==""&&city=="" {continue}
-  key:=strings.ToLower(region)+"\x00"+strings.ToLower(city)
+  canonicalRegion,canonicalCity:=normalizedLocation(region,city)
+  key:=strings.ToLower(canonicalRegion)+"\x00"+strings.ToLower(canonicalCity)
   if index,ok:=seen[key];ok {
    result[index].Sources=append(result[index].Sources,src.Name)
   }else{
@@ -540,7 +541,7 @@ func printResult(r Result,all,whoisOnly bool,lang string){
  if r.Scope!="" && r.Scope!="public" {fmt.Println("  "+translate(lang,"addressType")+": "+scopeLabel(lang,r.Scope));return}
  s:=r.Summary
  items:=[][2]string{
-  {translate(lang,"country"),countryName(lang,s.Country)}, {translate(lang,"locations"),strings.Join(locationLabels(s.Locations),"、")},{"ISP",s.ISP},
+  {translate(lang,"country"),countryName(lang,s.Country)}, {translate(lang,"locations"),strings.Join(locationLabelsLang(s.Locations,lang),"、")},{"ISP",s.ISP},
   {translate(lang,"organization"),s.Organization},{"ASN",s.ASN},{translate(lang,"timezone"),s.Timezone},
   {translate(lang,"registeredCountry"),countryName(lang,s.RegisteredCountry)},{translate(lang,"network"),s.Network},{translate(lang,"abuseEmail"),s.AbuseEmail},
  }
@@ -647,7 +648,7 @@ func compactLine(r Result,whoisOnly bool,lang string)string {
  if len(s.Locations)>0 {
   sep:="、"
   if lang=="en" {sep="; "}
-  line+=" | "+translate(lang,"locations")+": "+strings.Join(locationLabels(s.Locations),sep)
+  line+=" | "+translate(lang,"locations")+": "+strings.Join(locationLabelsLang(s.Locations,lang),sep)
  }
  if len(differences)>0 {line+=" | "+translate(lang,"geoDifference")+": "+strings.Join(differences,",")}
  if ok==0 {line+=" | "+translate(lang,"sourceFailure")}
