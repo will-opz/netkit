@@ -76,6 +76,7 @@ type Summary struct {
 type Result struct {
  IP string `json:"ip"`
  Scope string `json:"scope,omitempty"`
+ KnownDNS *KnownDNS `json:"known_dns,omitempty"`
  Summary Summary `json:"summary"`
  Sources []Source `json:"sources,omitempty"`
  Whois Registry `json:"whois"`
@@ -314,6 +315,7 @@ func publicIP(client *http.Client,timeout time.Duration)(string,error){
 }
 func lookup(client *http.Client,ip string,timeout time.Duration,whoisOnly bool) Result {
  r:=Result{IP:ip}
+ r.KnownDNS=identifyPublicDNS(ip)
  r.Scope=ipScope(net.ParseIP(ip))
  if r.Scope!="public" {return r}
  if whoisOnly {
@@ -599,6 +601,7 @@ func printResult(r Result,all,whoisOnly bool,lang string){
  fmt.Printf("\nIP: %s\n",r.IP)
  if r.Scope!="" && r.Scope!="public" {fmt.Println("  "+translate(lang,"addressType")+": "+scopeLabel(lang,r.Scope));return}
  s:=r.Summary
+ if r.KnownDNS!=nil {fmt.Println("  "+translate(lang,"knownDNS")+": "+r.KnownDNS.Provider+" ("+translate(lang,"catalogMatch")+")")}
  items:=[][2]string{
   {translate(lang,"country"),countryName(lang,s.Country)}, {translate(lang,"locations"),strings.Join(locationLabelsLang(s.Locations,lang),"、")},{"ISP",s.ISP},
   {translate(lang,"organization"),s.Organization},{"ASN",s.ASN},{translate(lang,"timezone"),s.Timezone},
@@ -639,7 +642,7 @@ var messages = map[string]map[string]string{
   "agree":"个数据源一致","alternatives":"其他结果","whoisPath":"WHOIS 查询路径",
   "whoisError":"WHOIS 错误","whoisRaw":"WHOIS 原始数据","error":"错误",
   "yes":"是","no":"否","unknown":"未知","unavailable":"不可用",
-  "sources":"数据源","geoDifference":"GeoIP 差异","sourceFailure":"GeoIP 全部失败",
+  "sources":"数据源","geoDifference":"GeoIP 差异","sourceFailure":"GeoIP 全部失败","knownDNS":"公共 DNS","catalogMatch":"内置列表精确匹配",
   "addressType":"地址类型","localNoQuery":"跳过公网 GeoIP/WHOIS","host":"主机名","localIP":"本机出口内网 IP","interfaces":"网络接口","gateways":"默认网关","publicIP":"公网 IP","publicDetail":"公网信息","warnings":"提示","unavailableGW":"未能检测默认网关","locations":"地点候选","networkOverview":"本机网络概览","hiddenInterfaces":"已隐藏 %d 个其他接口（-all 查看）",
  },
  "en": {
@@ -649,7 +652,7 @@ var messages = map[string]map[string]string{
   "agree":"sources agree","alternatives":"alternatives","whoisPath":"WHOIS path",
   "whoisError":"WHOIS error","whoisRaw":"WHOIS raw","error":"Error",
   "yes":"Yes","no":"No","unknown":"Unknown","unavailable":"N/A",
-  "sources":"Sources","geoDifference":"GeoIP mismatch","sourceFailure":"All GeoIP sources failed",
+  "sources":"Sources","geoDifference":"GeoIP mismatch","sourceFailure":"All GeoIP sources failed","knownDNS":"Public DNS","catalogMatch":"exact catalog match",
   "addressType":"Address type","localNoQuery":"Public GeoIP/WHOIS skipped","host":"Hostname","localIP":"Local outbound IP","interfaces":"Interfaces","gateways":"Default gateways","publicIP":"Public IP","publicDetail":"Public details","warnings":"Warnings","unavailableGW":"Default gateway unavailable","locations":"Locations","networkOverview":"Local network overview","hiddenInterfaces":"%d additional interfaces hidden (use -all)",
  },
 }
@@ -691,8 +694,9 @@ func compactLine(r Result,whoisOnly bool,lang string)string {
   whoisStatus="OK"
  } else if r.Whois.Error!="" {whoisStatus=translate(lang,"error")}
  if whoisOnly {
-  return fmt.Sprintf("%s | WHOIS: %s | %s | %s | %s | %s",
+  line:=fmt.Sprintf("%s | WHOIS: %s | %s | %s | %s | %s",
    r.IP,whoisStatus,cleanDisplay(countryName(lang,country)),cleanDisplay(s.ASN),cleanDisplay(s.Organization),cleanDisplay(s.Network))
+  return appendKnownDNS(line,r,lang)
  }
  ok:=0
  for _,source:=range r.Sources {if source.Error=="" {ok++}}
@@ -711,6 +715,10 @@ func compactLine(r Result,whoisOnly bool,lang string)string {
  }
  if len(differences)>0 {line+=" | "+translate(lang,"geoDifference")+": "+strings.Join(differences,",")}
  if ok==0 {line+=" | "+translate(lang,"sourceFailure")}
+ return appendKnownDNS(line,r,lang)
+}
+func appendKnownDNS(line string,r Result,lang string)string{
+ if r.KnownDNS!=nil {return line+" | "+translate(lang,"knownDNS")+": "+r.KnownDNS.Provider}
  return line
 }
 func printCompact(r Result,whoisOnly bool,lang string) {
