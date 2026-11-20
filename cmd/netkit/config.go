@@ -124,7 +124,8 @@ func loadAISettingsWithReader(readSecret func(string,string)(string,error))(AISe
  if loopback{return settings,nil} // local Ollama needs no key
  if cfg.AI.Credential.Source=="keychain"{
   key,err:=readSecret(cfg.AI.Credential.Service,cfg.AI.Credential.Account)
-  if err!=nil{return settings,err}
+  if err!=nil{return settings,errors.New("Keychain credential unavailable; run 'netkit config ai-key set' or use NETKIT_AI_API_KEY")}
+  if key==""{return settings,errors.New("Keychain credential is empty")}
   settings.APIKey=key
  }
  return settings,nil
