@@ -51,7 +51,11 @@ func validTCPHost(host string)bool{
 func probeTCP(ctx context.Context,host string,port int,resolve TCPResolver)(report TCPReport){
  return probeTCPMode(ctx,host,port,resolve,false)
 }
+type TCPDial func(context.Context,string,string)(net.Conn,error)
 func probeTCPMode(ctx context.Context,host string,port int,resolve TCPResolver,allIPs bool)(report TCPReport){
+ return probeTCPWithDial(ctx,host,port,resolve,allIPs,(&net.Dialer{}).DialContext)
+}
+func probeTCPWithDial(ctx context.Context,host string,port int,resolve TCPResolver,allIPs bool,dial TCPDial)(report TCPReport){
  report=TCPReport{Host:host,Port:port,Status:"unknown",Attempts:[]TCPAttempt{},AllIPs:allIPs}
  start:=time.Now()
  defer func(){report.TotalDurationMS=time.Since(start).Milliseconds()}()
@@ -89,8 +93,7 @@ func probeTCPMode(ctx context.Context,host string,port int,resolve TCPResolver,a
   if net.ParseIP(ip).To4()!=nil{family="IPv4"}
   addr:=net.JoinHostPort(ip,fmt.Sprint(port))
   started:=time.Now()
-  dialer:=&net.Dialer{}
-  conn,err:=dialer.DialContext(ctx,"tcp",addr)
+  conn,err:=dial(ctx,"tcp",addr)
   duration:=time.Since(started).Milliseconds()
   attempt:=TCPAttempt{IP:ip,Address:addr,Family:family,DurationMS:duration}
   if err==nil{
