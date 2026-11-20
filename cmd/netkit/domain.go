@@ -125,6 +125,7 @@ func runDomain(args []string)error{
  if len(args)==0||args[0]=="-h"||args[0]=="--help"{domainHelp();return nil}
  records:=false
  if args[0]=="records"{records=true;args=args[1:]}
+ if len(args)>0&&(args[0]=="-h"||args[0]=="--help"){domainHelp();return nil}
  fs:=flag.NewFlagSet("domain",flag.ContinueOnError)
  output:=fs.String("output","text","text/json")
  lang:=fs.String("lang","zh","zh/en")
