@@ -18,6 +18,7 @@ type HTTPHop struct {
  StatusCode int `json:"status_code"`
  Location string `json:"location,omitempty"`
  DurationMS int64 `json:"duration_ms"`
+ Phases HTTPPhases `json:"phases"`
 }
 type HTTPReport struct {
  Target string `json:"target"`
@@ -65,7 +66,8 @@ func traceHTTP(ctx context.Context,client *http.Client,target string,limit int)H
  for {
   if seen[current]{r.Status="redirect_loop";r.Error="redirect loop detected";r.FinalURL=current;return r}
   seen[current]=true
-  req,err:=http.NewRequestWithContext(ctx,http.MethodGet,current,nil)
+  recorder:=&httpPhaseRecorder{}
+  req,err:=http.NewRequestWithContext(withHTTPPhaseTrace(ctx,recorder),http.MethodGet,current,nil)
   if err!=nil{r.Status="request_error";r.Error=err.Error();r.FinalURL=current;return r}
   req.Header.Set("User-Agent",agent)
   started:=time.Now()
@@ -75,7 +77,7 @@ func traceHTTP(ctx context.Context,client *http.Client,target string,limit int)H
   // Drain no body: reading arbitrary HTML is unnecessary for redirect diagnosis.
   io.Copy(io.Discard,io.LimitReader(res.Body,0))
   res.Body.Close()
-  hop:=HTTPHop{URL:current,StatusCode:res.StatusCode,DurationMS:elapsed}
+  hop:=HTTPHop{URL:current,StatusCode:res.StatusCode,DurationMS:elapsed,Phases:recorder.result()}
   location:=res.Header.Get("Location")
   if res.StatusCode==301||res.StatusCode==302||res.StatusCode==303||res.StatusCode==307||res.StatusCode==308{
    hop.Location=location
@@ -131,6 +133,7 @@ func runHTTP(args []string)error{
   fmt.Printf("%s: %s\n",label("HTTP 目标","HTTP target"),report.Target)
   for i,hop:=range report.Hops{
    fmt.Printf("  %d. HTTP %d | %dms | %s\n",i+1,hop.StatusCode,hop.DurationMS,hop.URL)
+   fmt.Print(formatHTTPPhases(hop.Phases,*lang))
    if hop.Location!=""{fmt.Printf("     Location: %s\n",hop.Location)}
   }
   fmt.Printf("%s: %s | %s: %d\n",label("结果","Result"),report.Status,label("跳转次数","Redirects"),report.Redirects)
