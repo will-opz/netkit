@@ -102,3 +102,49 @@ func TestTCPTargetInvalidPort(t *testing.T){
   }
  }
 }
+
+func TestTCPAllIPsPartialFailure(t *testing.T){
+ ln,err:=net.Listen("tcp4","127.0.0.1:0")
+ if err!=nil{t.Fatal(err)}
+ defer ln.Close()
+ resolver:=func(context.Context,string)([]net.IPAddr,error){
+  return []net.IPAddr{{IP:net.ParseIP("127.0.0.1")},{IP:net.ParseIP("127.0.0.2")}},nil
+ }
+ ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
+ defer cancel()
+ r:=probeTCPMode(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver,true)
+ if r.Status!="partial_failure"||!r.AllIPs||r.SuccessCount!=1||r.FailureCount!=1||len(r.Attempts)!=2{
+  t.Fatalf("expected both addresses and partial failure: %+v",r)
+ }
+ if !r.Attempts[0].Connected||r.Attempts[1].Connected{t.Fatalf("unexpected status ordering: %+v",r.Attempts)}
+}
+func TestTCPAllIPsAllSuccess(t *testing.T){
+ ln4,err:=net.Listen("tcp4","127.0.0.1:0")
+ if err!=nil{t.Fatal(err)}
+ defer ln4.Close()
+ // A second listener on 127.0.0.2 may not exist everywhere. Verify a
+ // deterministic duplicate address gets deduplicated instead.
+ resolver:=func(context.Context,string)([]net.IPAddr,error){
+  return []net.IPAddr{{IP:net.ParseIP("127.0.0.1")},{IP:net.ParseIP("127.0.0.1")}},nil
+ }
+ ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
+ defer cancel()
+ r:=probeTCPMode(ctx,"test.example",ln4.Addr().(*net.TCPAddr).Port,resolver,true)
+ if r.Status!="connected"||r.SuccessCount!=1||r.FailureCount!=0||len(r.Attempts)!=1{
+  t.Fatalf("unexpected all-ips success: %+v",r)
+ }
+}
+func TestTCPDefaultStopsAfterFirstSuccess(t *testing.T){
+ ln,err:=net.Listen("tcp4","127.0.0.1:0")
+ if err!=nil{t.Fatal(err)}
+ defer ln.Close()
+ resolver:=func(context.Context,string)([]net.IPAddr,error){
+  return []net.IPAddr{{IP:net.ParseIP("127.0.0.1")},{IP:net.ParseIP("127.0.0.2")}},nil
+ }
+ ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
+ defer cancel()
+ r:=probeTCP(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver)
+ if r.Status!="connected"||len(r.Attempts)!=1||r.AllIPs{
+  t.Fatalf("default quick probe behavior changed: %+v",r)
+ }
+}
