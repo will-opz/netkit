@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Verify and package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check tag and version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version tag must be vMAJOR.MINOR.PATCH"; exit 1; }
+            echo "NETKIT_VERSION=$REF_NAME" >> "$GITHUB_ENV"
+          else
+            echo "NETKIT_VERSION=dev" >> "$GITHUB_ENV"
+          fi
+      - name: Verify source
+        run: |
+          go test ./...
+          go vet ./...
+      - name: Create archives and checksums
+        run: |
+          python3 scripts/package_release.py --version "$NETKIT_VERSION" --output dist
+          cd dist
+          sha256sum -c checksums.txt
+      - name: Inspect release payloads
+        run: |
+          python3 scripts/check_release.py --version "$NETKIT_VERSION" --dist dist
+      - name: Upload dry-run / release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: netkit-${{ env.NETKIT_VERSION }}-archives
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release for verified tag
+    needs: package
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: netkit-${{ github.ref_name }}-archives
+          path: dist
+      - name: Publish official tagged GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          cd dist
+          sha256sum -c checksums.txt
+          # Never create tags here. Only attach verified files to a tag
+          # already pushed by the owner, and fail if the Release exists.
+          gh release view "$TAG" >/dev/null 2>&1 && { echo "Release already exists; refusing overwrite"; exit 1; }
+          gh release create "$TAG" ./* --verify-tag --title "$TAG" --generate-notes
+
+# Deliberately no Homebrew Tap mutation. Update the Tap only after the
+# official tagged GitHub Release and download/checksum verification.
