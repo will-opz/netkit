@@ -95,12 +95,15 @@ func main() {
  whoisOnly := flag.Bool("whois", false, "query native WHOIS only (TCP port 43)")
  jsonFlag := flag.Bool("json", false, "output JSON")
  timeout := flag.Duration("timeout", 5*time.Second, "per-request timeout")
+ lang := flag.String("lang", "zh", "output language: zh (default), en")
  flag.Usage = func() {
   fmt.Fprintln(flag.CommandLine.Output(), "Usage: netkit ip [options] [IPv4|IPv6 ...]")
   fmt.Fprintln(flag.CommandLine.Output(), "With no IP, discover public IP via HTTPS fallback endpoints.")
   flag.PrintDefaults()
  }
  flag.Parse()
+ *lang = strings.ToLower(strings.TrimSpace(*lang))
+ if *lang!="zh" && *lang!="en" {fmt.Fprintln(os.Stderr,"-lang 仅支持 zh 或 en / supported: zh, en");os.Exit(2)}
  if *timeout <= 0 { fmt.Fprintln(os.Stderr, "timeout must be positive"); os.Exit(2) }
  client := &http.Client{Transport: &http.Transport{Proxy:http.ProxyFromEnvironment, MaxIdleConns:16, IdleConnTimeout:30*time.Second}}
  ips := flag.Args()
@@ -125,7 +128,7 @@ func main() {
   fmt.Println(string(b))
  } else {
   for _,r:=range results {
-   if *all {printResult(r,true,*whoisOnly)} else {printCompact(r,*whoisOnly)}
+   if *all {printResult(r,true,*whoisOnly,*lang)} else {printCompact(r,*whoisOnly,*lang)}
   }
  }
  if invalid||len(results)==0 {os.Exit(2)}
@@ -406,69 +409,115 @@ func queryWhois(ip string,timeout time.Duration)Registry {
  }
  return r
 }
-func printResult(r Result,all,whoisOnly bool){
+func printResult(r Result,all,whoisOnly bool,lang string){
  fmt.Printf("\nIP: %s\n",r.IP)
  s:=r.Summary
  items:=[][2]string{
-  {"Country",s.Country},{"Region",s.Region},{"City",s.City},{"ISP",s.ISP},
-  {"Organization",s.Organization},{"ASN",s.ASN},{"Timezone",s.Timezone},
-  {"WHOIS country",s.RegisteredCountry},{"Network",s.Network},{"Abuse email",s.AbuseEmail},
+  {translate(lang,"country"),countryName(lang,s.Country)}, {translate(lang,"region"),s.Region},{translate(lang,"city"),s.City},{"ISP",s.ISP},
+  {translate(lang,"organization"),s.Organization},{"ASN",s.ASN},{translate(lang,"timezone"),s.Timezone},
+  {translate(lang,"registeredCountry"),countryName(lang,s.RegisteredCountry)},{translate(lang,"network"),s.Network},{translate(lang,"abuseEmail"),s.AbuseEmail},
  }
  for _,pair:=range items {if pair[1]!="" {fmt.Printf("  %-18s %s\n",pair[0]+":",pair[1])}}
- if s.Hosting!=nil {fmt.Printf("  Hosting:            %v (provider observation)\n",*s.Hosting)}
- if s.Proxy!=nil {fmt.Printf("  Proxy:              %v (provider observation)\n",*s.Proxy)}
+ if s.Hosting!=nil {fmt.Printf("  %s: %s (%s)\n",translate(lang,"hosting"),yesNo(lang,*s.Hosting),translate(lang,"providerObservation"))}
+ if s.Proxy!=nil {fmt.Printf("  %s: %s (%s)\n",translate(lang,"proxy"),yesNo(lang,*s.Proxy),translate(lang,"providerObservation"))}
  keys:=make([]string,0,len(s.Agreements))
  for k:=range s.Agreements {keys=append(keys,k)}
  sort.Strings(keys)
  for _,k:=range keys {
   a:=s.Agreements[k]
-  fmt.Printf("  %-18s %d/%d API source(s) agree\n",k+" agreement:",a.Agree,a.Reported)
-  if len(a.Alternatives)>0 {fmt.Printf("    alternatives: %v\n",a.Alternatives)}
+  fmt.Printf("  %s: %d/%d %s\n",translate(lang,k),a.Agree,a.Reported,translate(lang,"agree"))
+  if len(a.Alternatives)>0 {fmt.Printf("    %s: %v\n",translate(lang,"alternatives"),a.Alternatives)}
  }
- if len(r.Whois.Servers)>0 {fmt.Println("  WHOIS path:         "+strings.Join(r.Whois.Servers," -> "))}
- if r.Whois.Error!="" {fmt.Println("  WHOIS error:        "+r.Whois.Error)}
+ if len(r.Whois.Servers)>0 {fmt.Println("  "+translate(lang,"whoisPath")+": "+strings.Join(r.Whois.Servers," -> "))}
+ if r.Whois.Error!="" {fmt.Println("  "+translate(lang,"whoisError")+": "+r.Whois.Error)}
  if whoisOnly||all {
-  if r.Whois.Raw!="" {fmt.Printf("\n[WHOIS raw]\n%s\n",r.Whois.Raw)}
+  if r.Whois.Raw!="" {fmt.Printf("\n[%s]\n%s\n",translate(lang,"whoisRaw"),r.Whois.Raw)}
  }
  if all&&!whoisOnly {
   for _,src:=range r.Sources {
    fmt.Printf("\n[%s] %dms %s\n",src.Name,src.DurationMS,src.URL)
-   if src.Error!="" {fmt.Println("ERROR:",src.Error)}
+   if src.Error!="" {fmt.Println(translate(lang,"error")+":",src.Error)}
    if src.Data!=nil {b,_:=json.MarshalIndent(src.Data,"","  ");fmt.Println(string(b))}
   }
  }
 }
 
-func printCompact(r Result,whoisOnly bool) {
- s:=r.Summary
- display:=func(x string)string {
-  if strings.TrimSpace(x)=="" {return "-"}
-  return strings.Join(strings.Fields(x)," ")
+// The localization boundary applies to human-readable terminal output only.
+// JSON keys and source payloads remain stable across languages.
+var messages = map[string]map[string]string{
+ "zh": {
+  "country":"国家","region":"地区","city":"城市","organization":"组织","timezone":"时区",
+  "registeredCountry":"WHOIS 注册国家","network":"注册网段","abuseEmail":"滥用投诉邮箱",
+  "hosting":"机房","proxy":"代理","providerObservation":"数据源检测",
+  "agree":"个数据源一致","alternatives":"其他结果","whoisPath":"WHOIS 查询路径",
+  "whoisError":"WHOIS 错误","whoisRaw":"WHOIS 原始数据","error":"错误",
+  "yes":"是","no":"否","unknown":"未知","unavailable":"不可用",
+  "sources":"数据源","geoDifference":"GeoIP 差异","sourceFailure":"GeoIP 全部失败",
+ },
+ "en": {
+  "country":"Country","region":"Region","city":"City","organization":"Organization","timezone":"Timezone",
+  "registeredCountry":"WHOIS country","network":"Network","abuseEmail":"Abuse email",
+  "hosting":"Hosting","proxy":"Proxy","providerObservation":"provider observation",
+  "agree":"sources agree","alternatives":"alternatives","whoisPath":"WHOIS path",
+  "whoisError":"WHOIS error","whoisRaw":"WHOIS raw","error":"Error",
+  "yes":"Yes","no":"No","unknown":"Unknown","unavailable":"N/A",
+  "sources":"Sources","geoDifference":"GeoIP mismatch","sourceFailure":"All GeoIP sources failed",
+ },
+}
+func translate(lang,key string)string {
+ if labels,ok:=messages[lang];ok {
+  if text,ok:=labels[key];ok {return text}
  }
+ return key
+}
+func yesNo(lang string,b bool)string {if b{return translate(lang,"yes")};return translate(lang,"no")}
+var zhCountries=map[string]string{
+ "US":"美国","CN":"中国","JP":"日本","AU":"澳大利亚","GB":"英国","DE":"德国",
+ "FR":"法国","CA":"加拿大","SG":"新加坡","HK":"中国香港","TW":"中国台湾",
+ "KR":"韩国","IN":"印度","RU":"俄罗斯","NL":"荷兰","BR":"巴西","VN":"越南",
+ "TH":"泰国","MY":"马来西亚","ID":"印度尼西亚","PH":"菲律宾","NZ":"新西兰",
+ "CH":"瑞士","SE":"瑞典","NO":"挪威","FI":"芬兰","IT":"意大利","ES":"西班牙",
+ "IE":"爱尔兰","PL":"波兰","TR":"土耳其","ZA":"南非","AE":"阿联酋",
+ "MX":"墨西哥","AR":"阿根廷","CO":"哥伦比亚","EG":"埃及","IL":"以色列",
+}
+func countryName(lang,code string)string {
+ if lang=="zh" {
+  if name,ok:=zhCountries[strings.ToUpper(strings.TrimSpace(code))];ok{return name}
+ }
+ return code
+}
+func cleanDisplay(v string)string {
+ if strings.TrimSpace(v)=="" {return "-"}
+ return strings.Join(strings.Fields(v)," ")
+}
+func compactLine(r Result,whoisOnly bool,lang string)string {
+ s:=r.Summary
  country:=s.Country
  if whoisOnly {country=s.RegisteredCountry}
- hosting:="Unknown"
- if s.Hosting!=nil {if *s.Hosting {hosting="Yes"} else {hosting="No"}}
- whoisStatus:="N/A"
- if len(r.Whois.Servers)>0 {
+ hosting:=translate(lang,"unknown")
+ if s.Hosting!=nil {hosting=yesNo(lang,*s.Hosting)}
+ whoisStatus:=translate(lang,"unavailable")
+ if len(r.Whois.Servers)>0 && r.Whois.Error=="" && (r.Whois.Range!=""||r.Whois.CIDR!=""||r.Whois.NetName!=""||r.Whois.Organization!="") {
   whoisStatus="OK"
-  if r.Whois.Error!="" {whoisStatus="Error"}
- } else if r.Whois.Error!="" {whoisStatus="Error"}
+ } else if r.Whois.Error!="" {whoisStatus=translate(lang,"error")}
  if whoisOnly {
-  fmt.Printf("%s | WHOIS: %s | %s | %s | %s | %s\n",
-   r.IP,whoisStatus,display(country),display(s.ASN),display(s.Organization),display(s.Network))
-  return
+  return fmt.Sprintf("%s | WHOIS: %s | %s | %s | %s | %s",
+   r.IP,whoisStatus,cleanDisplay(countryName(lang,country)),cleanDisplay(s.ASN),cleanDisplay(s.Organization),cleanDisplay(s.Network))
  }
  ok:=0
  for _,source:=range r.Sources {if source.Error=="" {ok++}}
- warnings:=[]string{}
+ differences:=[]string{}
  for _,key:=range []string{"country","region","city","asn"} {
   a,exists:=s.Agreements[key]
-  if exists&&len(a.Alternatives)>0 {warnings=append(warnings,key)}
+  if exists&&len(a.Alternatives)>0 {differences=append(differences,translate(lang,key))}
  }
- if ok==0 {warnings=append(warnings,"all GeoIP sources failed")}
- line:=fmt.Sprintf("%s | %s | %s | %s | Hosting: %s | Sources: %d/%d | WHOIS: %s",
-  r.IP,display(country),display(s.ASN),display(s.Organization),hosting,ok,len(r.Sources),whoisStatus)
- if len(warnings)>0 {line+=" | ! Difference/issue: "+strings.Join(warnings,",")}
- fmt.Println(line)
+ line:=fmt.Sprintf("%s | %s | %s | %s | %s: %s | %s: %d/%d | WHOIS: %s",
+  r.IP,cleanDisplay(countryName(lang,country)),cleanDisplay(s.ASN),cleanDisplay(s.Organization),
+  translate(lang,"hosting"),hosting,translate(lang,"sources"),ok,len(r.Sources),whoisStatus)
+ if len(differences)>0 {line+=" | "+translate(lang,"geoDifference")+": "+strings.Join(differences,",")}
+ if ok==0 {line+=" | "+translate(lang,"sourceFailure")}
+ return line
+}
+func printCompact(r Result,whoisOnly bool,lang string) {
+ fmt.Println(compactLine(r,whoisOnly,lang))
 }
