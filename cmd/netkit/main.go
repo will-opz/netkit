@@ -79,37 +79,37 @@ var providers = []provider{
 
 func main() {
  if len(os.Args)<2 || os.Args[1]=="-h" || os.Args[1]=="--help" || os.Args[1]=="help" {
-  fmt.Println("NetKit: network diagnostics toolkit")
+  fmt.Println("NetKit：网络诊断工具箱")
   fmt.Println("Usage: netkit ip [options] [IPv4|IPv6 ...]")
-  fmt.Println("Commands:\n  ip    Multi-source IP geolocation and WHOIS lookup")
-  fmt.Println("Run netkit ip -h for flags. With no IP, discover your public IP.")
+  fmt.Println("子命令:\n  ip    多数据源 IP 信息与 WHOIS 查询")
+  fmt.Println("使用 netkit ip -h 查看参数；不指定 IP 时自动查询本机公网 IP。")
   return
  }
  if os.Args[1]!="ip" {
-  fmt.Fprintln(os.Stderr,"unknown command:",os.Args[1])
+  fmt.Fprintln(os.Stderr,"未知子命令:",os.Args[1])
   fmt.Fprintln(os.Stderr,"Usage: netkit ip [options] [IPv4|IPv6 ...]")
   os.Exit(2)
  }
  os.Args=append([]string{os.Args[0]},os.Args[2:]...)
- all := flag.Bool("all", false, "print individual API responses and raw WHOIS")
- whoisOnly := flag.Bool("whois", false, "query native WHOIS only (TCP port 43)")
- jsonFlag := flag.Bool("json", false, "output JSON")
- timeout := flag.Duration("timeout", 5*time.Second, "per-request timeout")
- lang := flag.String("lang", "zh", "output language: zh (default), en")
+ all := flag.Bool("all", false, "显示各接口原始结果及 WHOIS")
+ whoisOnly := flag.Bool("whois", false, "仅查询原生 WHOIS（TCP 43）")
+ jsonFlag := flag.Bool("json", false, "输出 JSON（字段名固定为英文）")
+ timeout := flag.Duration("timeout", 5*time.Second, "每个请求的超时时间")
+ lang := flag.String("lang", "zh", "输出语言：zh（默认中文）、en（英文）")
  flag.Usage = func() {
   fmt.Fprintln(flag.CommandLine.Output(), "Usage: netkit ip [options] [IPv4|IPv6 ...]")
-  fmt.Fprintln(flag.CommandLine.Output(), "With no IP, discover public IP via HTTPS fallback endpoints.")
+  fmt.Fprintln(flag.CommandLine.Output(), "不指定 IP 时通过多个 HTTPS 接口检测当前公网 IP。")
   flag.PrintDefaults()
  }
  flag.Parse()
  *lang = strings.ToLower(strings.TrimSpace(*lang))
  if *lang!="zh" && *lang!="en" {fmt.Fprintln(os.Stderr,"-lang 仅支持 zh 或 en / supported: zh, en");os.Exit(2)}
- if *timeout <= 0 { fmt.Fprintln(os.Stderr, "timeout must be positive"); os.Exit(2) }
+ if *timeout <= 0 { fmt.Fprintln(os.Stderr, "超时时间必须大于 0"); os.Exit(2) }
  client := &http.Client{Transport: &http.Transport{Proxy:http.ProxyFromEnvironment, MaxIdleConns:16, IdleConnTimeout:30*time.Second}}
  ips := flag.Args()
  if len(ips)==0 {
   ip,err := publicIP(client,*timeout)
-  if err!=nil {fmt.Fprintln(os.Stderr,"public IP discovery:",err);os.Exit(1)}
+  if err!=nil {fmt.Fprintln(os.Stderr,"公网 IP 检测失败:",err);os.Exit(1)}
   ips=[]string{ip}
  }
  results:=make([]Result,0,len(ips))
@@ -117,7 +117,7 @@ func main() {
  invalid:=false
  for _,input:=range ips {
   ip:=net.ParseIP(input)
-  if ip==nil {fmt.Fprintln(os.Stderr,"invalid IP:",input);invalid=true;continue}
+  if ip==nil {fmt.Fprintln(os.Stderr,"无效 IP:",input);invalid=true;continue}
   key:=ip.String()
   if seen[key] {continue};seen[key]=true
   results=append(results,lookup(client,key,*timeout,*whoisOnly))
