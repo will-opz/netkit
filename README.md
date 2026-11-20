@@ -56,7 +56,7 @@ By default, each IP produces **exactly one line**, suitable for terminals and ba
 8.8.8.8 | 美国 | AS15169 | Google LLC | 机房: 是 | 数据源: 4/4 | WHOIS: OK
 ```
 
-Default output language is **Simplified Chinese** (`-lang zh`). Use `-lang en` for English. `数据源: 4/4` counts successful HTTP providers; it **does not mean all four agree**. If reported country/region/city/ASN differs, `GeoIP 差异` is appended. `机房: 未知` means no provider supplied a detection; it is not equivalent to `否`. Unknown country codes are left unchanged, and provider-supplied city and region names are not automatically translated.
+Default output language is **Simplified Chinese** (`-lang zh`). Use `-lang en` for English. `数据源: 4/4` counts successful HTTP providers; it **does not mean all four agree**. Region and city are combined as per-provider location pairs, then deduplicated and shown together (e.g. `地点候选: 东京/新宿、千叶县/千叶`). Each pair comes from the same source, and candidates are ordered by provider agreement count (stable ties). The JSON `summary.locations` array includes each candidate and the providers reporting it. Distinct country/ASN results still trigger `GeoIP 差异`. `机房: 未知` means no provider supplied a detection; it is not equivalent to `否`. Unknown country codes are left unchanged, and provider-supplied city and region names are not automatically translated.
 
 `-all` preserves the detailed, multi-line original results for troubleshooting (field labels localized, original provider JSON untouched). `-json` returns structured reports with **stable English keys and original country codes regardless of language**, including field-level agreements, alternatives and WHOIS. This keeps JSON consumers backward compatible.
 
