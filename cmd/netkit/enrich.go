@@ -21,6 +21,9 @@ type RDAPInfo struct {
  URL string `json:"url,omitempty"`
  Name string `json:"name,omitempty"`
  Handle string `json:"handle,omitempty"`
+ Organization string `json:"organization,omitempty"`
+ AbuseEmails []string `json:"abuse_emails,omitempty"`
+ Contacts []RDAPContact `json:"contacts,omitempty"`
  Country string `json:"country,omitempty"`
  StartAddress string `json:"start_address,omitempty"`
  EndAddress string `json:"end_address,omitempty"`
@@ -88,12 +91,9 @@ func fetchRDAP(client *http.Client,ip string,timeout time.Duration)RDAPInfo{
  data,err:=httpJSON(ctx,client,r.URL)
  if err!=nil{r.Error=err.Error();return r}
  if value(data,"objectClassName")!="ip network" {r.Error="unexpected RDAP object class";return r}
- r.Name=value(data,"name")
- r.Handle=value(data,"handle")
- r.Country=value(data,"country")
- r.StartAddress=value(data,"startAddress")
- r.EndAddress=value(data,"endAddress")
- return r
+ parsedInfo:=parseRDAPNetwork(data)
+ parsedInfo.URL=r.URL
+ return parsedInfo
 }
 func lookupPTR(ip string,timeout time.Duration)PTRInfo{
  r:=PTRInfo{}
@@ -144,7 +144,13 @@ func printEnrichment(r Result,lang string){
  if r.RDAP!=nil {
   x:=r.RDAP
   if x.Error!="" {fmt.Println("RDAP:",translate(lang,"error"),x.Error)
-  }else{fmt.Printf("RDAP: %s | %s | %s - %s\n",cleanDisplay(x.Name),countryName(lang,x.Country),x.StartAddress,x.EndAddress)}
+  }else{
+   parts:=[]string{first(x.Organization,x.Name,x.Handle)}
+   if x.Country!="" {parts=append(parts,countryName(lang,x.Country))}
+   if x.StartAddress!=""&&x.EndAddress!="" {parts=append(parts,x.StartAddress+" - "+x.EndAddress)}
+   if len(x.AbuseEmails)>0 {parts=append(parts,"Abuse: "+strings.Join(x.AbuseEmails,","))}
+   fmt.Println("RDAP:",strings.Join(parts," | "))
+  }
  }
  if r.PTR!=nil {
   x:=r.PTR
