@@ -2,15 +2,20 @@
 
 Zero-external-dependency Go network diagnostics CLI. V1 provides multi-source IP geolocation and WHOIS registration lookup with fault isolation.
 
-## Build
+## Install and update
 
-Go 1.23+:
+Requires Go 1.23+ and Make. Clone once, then run `make` whenever you want to update the checkout and rebuild the binary:
 
 ```sh
 git clone https://github.com/will-opz/netkit.git
 cd netkit
-go build -o netkit ./cmd/netkit
+make                  # git pull --ff-only + go build -o netkit ./cmd/netkit
+./netkit
 ```
+
+Use `make build` to compile without pulling, `make check` for tests and vet, `make fmt` to format sources, and `make help` for the list. Updates are fast-forward only; `make` refuses to pull when tracked files contain uncommitted changes. The generated `./netkit` binary stays ignored by Git.
+
+
 
 ## Usage
 
@@ -37,6 +42,8 @@ Note: Go's standard `flag` parser expects options before IP arguments (e.g. `net
 直接执行 `netkit`（等同于 `netkit ip`）显示本机主机名、活动接口 IPv4/IPv6 地址与掩码、首选出口地址、默认 IPv4/IPv6 网关，以及通过多个 HTTPS 服务发现的公网 IP 和综合查询结果。公网查询失败不会阻止本地信息显示。
 
 网关检测：Linux 读取 `/proc/net/route` 与 `/proc/net/ipv6_route`；macOS 使用系统内置的 `route -n get` 命令（无需第三方软件）；其他平台标记为不可用，不猜测路由器地址。VPN/多路由环境中仅展示操作系统路由表确定的默认路由；无默认路由时显示不可用。
+
+默认终端输出按 **主机 / 主要接口 / 默认网关 / 公网信息** 分组。只显示出口网卡和默认路由对应网卡；macOS 的 utun、bridge、awdl 等额外接口折叠为数量提示。使用 `netkit ip -all` 或 `netkit ip -json` 查看全部接口和完整查询数据，不会丢失原始信息。终端默认不使用 ANSI 颜色，方便重定向和日志采集。
 
 不带地址时 `-json` 输出含 `interfaces`、`gateways`、`public_ip`、`public` 的对象；指定 IP 时保持此前的结果数组结构。`-all` 展开公网信息的各数据源详情。
 
