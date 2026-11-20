@@ -177,3 +177,30 @@ func TestLocationCandidatesMissingFields(t *testing.T){
  labels:=locationLabels(loc)
  if strings.Join(labels,",")!="California,Tokyo,Tokyo" {t.Fatalf("unexpected labels: %v",labels)}
 }
+
+func TestResolveOutputFormat(t *testing.T) {
+ cases:=[]struct{input string;legacy bool;want string;invalid bool}{
+  {"text",false,"text",false},
+  {"json",false,"json",false},
+  {"JSON",false,"json",false},
+  {"text",true,"json",false},
+  {"yaml",false,"",true},
+  {"",false,"",true},
+ }
+ for _,tc:=range cases{
+  got,err:=resolveOutputFormat(tc.input,tc.legacy)
+  if (err!=nil)!=tc.invalid||got!=tc.want {t.Errorf("%q legacy=%v got=%q err=%v",tc.input,tc.legacy,got,err)}
+ }
+}
+func TestGlobalOutputCommand(t *testing.T){
+ cases:=[]struct{input,want []string}{
+  {[]string{"netkit","--output","json"},[]string{"netkit","ip","--output","json"}},
+  {[]string{"netkit","--output=json"},[]string{"netkit","ip","--output=json"}},
+  {[]string{"netkit","ip","--output","json"},[]string{"netkit","ip","--output","json"}},
+  {[]string{"netkit","-h"},[]string{"netkit","-h"}},
+ }
+ for _,tc:=range cases{
+  got:=defaultCommandArgs(append([]string(nil),tc.input...))
+  if !reflect.DeepEqual(got,tc.want){t.Errorf("got %v, want %v",got,tc.want)}
+ }
+}
