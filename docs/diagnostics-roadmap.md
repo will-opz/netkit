@@ -57,3 +57,56 @@ Development changes and passing CI do **not** update `will-opz/homebrew-tap`. On
 - [x] P0.1 TLS command (first implementation: handshake, trust, dates, ALPN, JSON and local tests; continue refining based on field feedback).
 - [x] P0.2 HTTP redirect chain (standalone command, bounded hops, per-hop status/location/duration, error categories and offline tests).
 - [x] P0.3 TCP reachability (local DNS/TCP probes, IPv4/IPv6, resolved-IP fallback, bounded timeout, JSON and offline tests).
+
+
+## Peer-tool research and optimization plan (2026-11-20)
+
+Peer tools reviewed for product direction: `dig`, `doggo`, `dnsx` (DNS and bulk); `curl`, `httpstat`, `HTTPie` (HTTP stages and UX); `openssl`, `testssl.sh`, `step` (TLS); `mtr`, `Trippy`, `gping` (network path). These are *reference capabilities*, not promises to implement their entire feature sets. NetKit's distinguishing proposition remains **small local CLI, objective evidence, cross-layer explanations and structured automation output**.
+
+### Next iteration: strengthen implemented commands before adding more
+
+| Order | Work | Current NetKit baseline | Concrete acceptance criteria |
+| --- | --- | --- | --- |
+| O1 / highest | HTTP per-phase timing via Go `net/http/httptrace` | Each redirect hop has only total elapsed time | Report DNS, connect, TLS, TTFB and total per hop when observable; indicate connection reuse, proxies and unavailable stages instead of inventing zeros; JSON and deterministic `httptest` coverage |
+| O2 / highest | TCP `-all-ips` opt-in | Stops after first successful resolved address | Default behavior unchanged; explicit flag checks each resolved A/AAAA address, bounded overall timeout, stable address order, per-IP status and failure evidence; IPv4/IPv6 local tests |
+| O3 / highest | DNS diagnostics correctness | Compare focuses on A/AAAA; detailed records via system resolver | Expose raw RCODE (NOERROR/NXDOMAIN/SERVFAIL/REFUSED), TTL, SOA/CAA/SRV, CNAME comparison; distinguish transport errors from authoritative negative answers; do not label any difference as poisoning |
+| O4 / high | TLS verification classification | Handshake, peer cert and verification exist | Distinguish expired/not-yet-valid, hostname mismatch, untrusted chain, handshake failure and timeout; optionally show SAN, SNI/ALPN and chain; never claim valid because handshake succeeded |
+| O5 / high | Domain apex and CDN accuracy | Small hand-written suffix list; CNAME/header evidence | Evaluate an updatable Public Suffix List under zero-external-Go-dependency constraint; preserve explicit-subdomain semantics; keep unknown/conflicting CDN evidence and handle flattened CNAME conservatively |
+
+### Reliability and developer-experience gates
+
+1. **Stable output contracts:** version JSON schema where necessary, keep older command behavior and field meanings, support JSON Lines for bulk workflows only after defining compatibility and exit semantics.
+2. **Consistent failure semantics:** document exit codes for usage errors, DNS failure, TCP failure, TLS validation failure and HTTP restriction/failure. Do not collapse network-unreachable and HTTP 403/429.
+3. **Observation provenance:** record the observer (`local_machine`), target, timestamp, resolver and resolved address where applicable. A local probe is not global reachability evidence.
+4. **Testing:** local deterministic tests for dual-stack fallback, slow/failed DNS, timeout/cancellation, HTTPS redirects/loop, proxies and TLS invalid certificates. Prefer strict CI build/vet/tests and smoke checks over live external sites.
+5. **Release management:** align a future signed/immutable official version tag, GitHub Release assets, changelog and Homebrew Formula; do **not** update the Tap for ordinary commits.
+
+### Longer-term feature choice
+
+- Design `netkit diagnose TARGET` only after HTTP/TCP/TLS/DNS produce compatible evidence. It should summarize DNS → TCP → TLS → HTTP with a clear first failing layer, confidence and next checks, **not** an arbitrary 0–100 health score.
+- Keep specialist capabilities optional: DNSSEC and authority tracing, Cloudflare trace, network traceroute, mail DNS policy and HTTP security headers; do not clone generic JSON/YAML/QR/password tools into NetKit.
+- Prioritize diagnostics and comparison across resolvers, IPv4 versus IPv6, distinct A/AAAA backends and local versus remote observation points where explicitly available.
+- Maintain NetKit as a network diagnostics CLI rather than a full security scanner, browser toolkit or remote monitoring service.
+
+### P0 verification commands (current implementations)
+
+From a local checkout, run `git pull --ff-only && make build && make check`, then use the locally built `./netkit` binary rather than assuming Homebrew has the latest unreleased changes.
+
+```sh
+# TLS certificate and handshake
+./netkit tls baidu.com
+./netkit tls -port 443 --output json www.baidu.com
+./netkit tls -timeout 8s example.com
+
+# HTTP redirect chain and access classification
+./netkit http baidu.com
+./netkit http --output json https://example.com/
+./netkit http -max-redirects 10 -timeout 8s https://www.baidu.com/
+
+# TCP connectivity (local observer, not TLS/HTTP status)
+./netkit tcp baidu.com 443
+./netkit tcp -timeout 3s --output json www.baidu.com 443
+./netkit tcp 127.0.0.1 5432  # only succeeds if a local service listens there
+```
+
+Tests above may legitimately return nonzero (for example, blocked or closed ports, certificate validation errors or restricted HTTP access); inspect the detailed evidence rather than interpreting every failure as a NetKit bug.
