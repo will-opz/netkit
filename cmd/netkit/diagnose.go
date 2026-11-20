@@ -137,9 +137,8 @@ func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,pro
   return bundle
  }
  if ctx.Err()!=nil{
-  for _,layer:=range plan.Steps[1:]{add(skippedStage(layer,"overall timeout exceeded"))}
-  bundle.Status="failed"
-  if bundle.FirstFailure==""{bundle.FirstFailure="dns.1";bundle.Stages[0].Status="failed";bundle.Stages[0].Error=ctx.Err().Error()}
+  add(DiagnosticStage{ID:"tcp.1",Layer:"tcp",Observer:"local_machine",Status:"failed",Error:ctx.Err().Error()})
+  for _,layer:=range plan.Steps[2:]{add(skippedStage(layer,"overall timeout exceeded"))}
   return bundle
  }
  // Reuse the DNS evidence for TCP to avoid resolving a different address set.
@@ -183,9 +182,9 @@ func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,pro
  httpCtx,cancelHTTP:=context.WithTimeout(ctx,6*perStage)
  defer cancelHTTP()
  urlTarget:=url.URL{Scheme:plan.Scheme,Host:net.JoinHostPort(plan.Host,strconv.Itoa(plan.Port)),Path:"/"}
+ httpStarted:=time.Now()
  httpResult:=probes.HTTP(httpCtx,&http.Client{Timeout:perStage},urlTarget.String(),5)
- stage:=DiagnosticStage{ID:"http.1",Layer:"http",Observer:"local_machine",Status:"ok",HTTP:&httpResult}
- for _,hop:=range httpResult.Hops{stage.DurationMS+=hop.DurationMS}
+ stage:=DiagnosticStage{ID:"http.1",Layer:"http",Observer:"local_machine",Status:"ok",HTTP:&httpResult,DurationMS:time.Since(httpStarted).Milliseconds()}
  if httpResult.Status=="restricted"{stage.Status="restricted"}
  if httpResult.Status!="ok"&&httpResult.Status!="restricted"{
   stage.Status="failed"
