@@ -35,11 +35,11 @@ func parseSuffixRules(data string)suffixRules{
   line=strings.ToLower(line)
   switch {
   case strings.HasPrefix(line,"!"):
-   rules.exception[strings.TrimPrefix(line,"!")]=true
+   rules.exception[encodeSuffixASCII(strings.TrimPrefix(line,"!"))]=true
   case strings.HasPrefix(line,"*."):
-   rules.wildcard[strings.TrimPrefix(line,"*.")]=true
+   rules.wildcard[encodeSuffixASCII(strings.TrimPrefix(line,"*."))]=true
   default:
-   rules.exact[line]=true
+   rules.exact[encodeSuffixASCII(line)]=true
   }
  }
  return rules
