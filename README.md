@@ -33,6 +33,10 @@ Use `make deploy` to build and install to `~/.local/bin/netkit` (creates the dir
 ./netkit ip 8.8.8.8 1.1.1.1                   # one line per IP
 ./netkit ip -all 8.8.8.8                      # full WHOIS and per-provider JSON
 ./netkit ip -whois 8.8.8.8                    # TCP 43 only
+./netkit ip -rdap 8.8.8.8                     # HTTPS RDAP (IANA bootstrap)
+./netkit ip -rdns 8.8.8.8                     # reverse DNS PTR
+./netkit ip -bgp 8.8.8.8                      # RIPE RIS announced prefix/ASN
+./netkit ip -rdap -rdns -bgp 8.8.8.8         # all three optional enrichments
 ./netkit ip -json 8.8.8.8                     # 旧版 JSON 参数，仍然兼容
 ./netkit ip -timeout 8s 2001:4860:4860::8888
 ```
@@ -62,6 +66,19 @@ By default, each IP produces **exactly one line**, suitable for terminals and ba
 Default output language is **Simplified Chinese** (`-lang zh`). Use `-lang en` for English. `数据源: 4/4` counts successful HTTP providers; it **does not mean all four agree**. Region and city are combined as per-provider location pairs, then deduplicated and shown together (e.g. `地点候选: 东京/新宿、千叶县/千叶`). Each pair comes from the same source, and candidates are ordered by provider agreement count (stable ties). The JSON `summary.locations` array includes each candidate and the providers reporting it. Distinct country/ASN results still trigger `GeoIP 差异`. `机房: 未知` means no provider supplied a detection; it is not equivalent to `否`. Unknown country codes are left unchanged, and provider-supplied city and region names are not automatically translated.
 
 `-all` preserves the detailed, multi-line original results for troubleshooting (field labels localized, original provider JSON untouched). `-json` returns structured reports with **stable English keys and original country codes regardless of language**, including field-level agreements, alternatives and WHOIS. This keeps JSON consumers backward compatible.
+
+## Optional IP enrichments (V1.1)
+
+The default `netkit ip <IP>` remains unchanged. Optional flags add independent, timeout-bounded information (shown below the summary, or structured under `rdap`, `ptr`, and `bgp` when `--output json` is used):
+
+- `-rdap`: download the IANA IPv4/IPv6 HTTPS bootstrap registry, longest-prefix match the IP, and query the selected registration server for the IP network. RDAP is authoritative registration data, **not a location claim**.
+- `-rdns`: perform a standard-library PTR reverse lookup; no PTR result is a normal outcome.
+- `-bgp`: call RIPEstat RIS `network-info` to return an observed announced prefix and one or more origin ASNs. Data comes from RIS routing observations and may lag real-time changes.
+- These flags only run for public IPs and are skipped for private/reserved IPs. Errors are isolated by subsystem and do not discard GeoIP/WHOIS results.
+
+For flag parsing with the Go standard library, put options before positional IPs: `netkit ip -bgp 8.8.8.8`, not `netkit ip 8.8.8.8 -bgp`.
+
+Reference documentation: [RFC 9224](https://www.rfc-editor.org/rfc/rfc9224), [RIPEstat network-info API](https://stat.ripe.net/docs/data-api/api-endpoints/network-info.html).
 
 ## Data sources
 
