@@ -95,9 +95,9 @@ func parseDiagnosticTarget(raw string)(DiagnosticPlan,error){
 func skippedStage(layer,reason string)DiagnosticStage{
  return DiagnosticStage{ID:layer+".1",Layer:layer,Observer:"local_machine",Status:"skipped",Error:reason}
 }
-func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,probes DiagnosticProbes)EvidenceBundle{
+func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,probes DiagnosticProbes)(bundle EvidenceBundle){
  started:=time.Now()
- bundle:=EvidenceBundle{
+ bundle=EvidenceBundle{
   SchemaVersion:"1",Plan:plan,ObservedAt:started.UTC().Format(time.RFC3339),
   Observer:"local_machine",Status:"ok",Stages:[]DiagnosticStage{},
  }
