@@ -30,6 +30,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit dns list                            # 常用公共 DNS 清单
 ./netkit dns compare baidu.com               # 比较本机/Cloudflare/Google DNS 结果
 ./netkit dns compare --output json baidu.com # DNS 对比 JSON
+./netkit tls example.com                     # TLS 握手、证书信任链、颁发者与到期时间
+./netkit tls -port 8443 --output json example.com # 自定义端口和 JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
 ./netkit domain example.com                  # 主域名和 www 的 CDN/网站可用性 + 注册信息
 ./netkit domain records example.com          # 详细 A/AAAA/MX/NS/TXT/CNAME 记录
@@ -60,6 +62,14 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## TLS certificate diagnostics (P0.1)
+
+`netkit tls HOST` runs a local TCP/TLS handshake and shows the negotiated protocol, cipher, ALPN, certificate subject/issuer, validity dates and number of days remaining. It then **independently verifies** the peer's certificate against the machine's system trust store, intermediate chain, server-auth usage and requested host/IP. An expired, untrusted or hostname-mismatched certificate reports a verification error even if the handshake succeeded.
+
+The probe intentionally collects an untrusted certificate during the diagnostic-only handshake (with verification performed explicitly afterward); it sends no HTTP/application payload. Certificate failure or connection failure returns a nonzero exit status. Use `-port`, `-timeout`, `-lang zh|en`, and `--output json`. If running inside a VPN or container, the observation reflects **that machine's** routing and trust store.
+
+See [diagnostic implementation roadmap](docs/diagnostics-roadmap.md) for planned TCP, HTTP redirect and evidence-first work. Development commits do **not** automatically update the Homebrew Tap; only a validated official tagged Release triggers a formula update.
 
 ## Known public DNS detection
 
