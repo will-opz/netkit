@@ -185,3 +185,14 @@ Release instructions: [docs/releasing.md](releasing.md). Changelog: [CHANGELOG.m
 - **Optional later**: explain IP/WHOIS/ASN provenance and changes between timestamped runs; deterministic explanations should be used for common errors where sufficient.
 
 **Release invariant:** development of any of the above must not create a formal version Tag or mutate `will-opz/homebrew-tap`. Only explicitly tagged, verified GitHub Releases can precede a separate Homebrew update.
+
+### A0 deterministic diagnostic implementation (2026-11-20)
+
+- [x] `netkit diagnose HOST|URL`: validated hostname/IP/HTTP(S) root target, default HTTPS, optional port, bounded DNS → TCP → TLS → HTTP checks.
+- [x] JSON `EvidenceBundle` schema v1 with observer, timestamp, `DiagnosticPlan`, stage IDs, stage evidence and first confirmed failing layer; English keys and bilingual terminal summary.
+- [x] Deterministic `failed`, `degraded` and `skipped` stages; preserve raw TCP/TLS/HTTP result structs without changing existing commands; no AI calls.
+- [x] Mocked/isolated offline tests for valid/invalid targets, sequential stage failures, restricted HTTP, consistent evidence IDs and JSON; CI smoke test with local loopback target.
+- [ ] A1 optional AI summary: uniform OpenAI-compatible API client, strict evidence references, opt-in redaction and failure isolation.
+- [ ] A0 follow-up: explicit per-IP pinning across DNS/TCP/TLS/HTTP for comparable CDN/backend tracing; current independent TLS/HTTP probes can reach different resolved IPs.
+
+Use `netkit diagnose --output json example.com` to inspect the evidence contract before A1.
