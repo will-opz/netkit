@@ -36,6 +36,10 @@ jobs:
           python3 scripts/package_release.py --version dev --output dist
           python3 scripts/check_release.py --version dev --dist dist
           ( cd dist && sha256sum -c checksums.txt )
+          mkdir -p /tmp/netkit-release-check
+          tar -xzf dist/netkit_dev_linux_amd64.tar.gz -C /tmp/netkit-release-check
+          /tmp/netkit-release-check/netkit version --output=json > /tmp/netkit-release-version.json
+          python3 -c 'import json,subprocess; v=json.load(open("/tmp/netkit-release-version.json")); assert v["version"]=="dev"; assert v["commit"]==subprocess.check_output(["git","rev-parse","--short=12","HEAD"],text=True).strip()'
       - name: Cross-platform compilation
         if: runner.os == 'Linux'
         run: |
