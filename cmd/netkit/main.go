@@ -119,7 +119,7 @@ func defaultCommandArgs(args []string) []string {
  if len(args)==1 {return append(args,"ip")}
  if len(args)>1 && !strings.HasPrefix(args[1],"-") {
   // Explicit subcommands win. A bare IP or domain is routed automatically.
-  switch args[1] {case "ip","dns","domain","tls","help":return args}
+  switch args[1] {case "ip","dns","domain","tls","http","help":return args}
   if net.ParseIP(args[1])!=nil {return append([]string{args[0],"ip"},args[1:]...)}
   if validDomain(args[1]) {return append([]string{args[0],"domain"},args[1:]...)}
  }
@@ -142,6 +142,7 @@ func printRootHelp() {
  fmt.Println("  netkit domain example.com  网站/CDN/注册信息诊断")
  fmt.Println("  netkit domain records example.com  详细 DNS 记录")
  fmt.Println("  netkit tls example.com    TLS 握手与证书诊断")
+ fmt.Println("  netkit http example.com   HTTP 逐跳重定向诊断")
  fmt.Println("  netkit --output json       以 JSON 输出本机网络概览")
  fmt.Println()
  fmt.Println("子命令:")
@@ -149,6 +150,7 @@ func printRootHelp() {
  fmt.Println("  dns     本机 DNS 配置和公共 DNS 目录")
  fmt.Println("  domain  网站/CDN 诊断、注册信息与 DNS 记录")
  fmt.Println("  tls     TLS 握手、证书信任链与有效期")
+ fmt.Println("  http    HTTP 响应、跳转路径与耗时")
  fmt.Println()
  fmt.Println("通用查询选项（使用 netkit ip -h 查看完整说明）:")
  fmt.Println("  --output text|json   输出格式（默认 text）")
@@ -187,6 +189,9 @@ func main() {
   return
  case "tls":
   if err:=runTLS(os.Args[2:]);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  return
+ case "http":
+  if err:=runHTTP(os.Args[2:]);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
   return
  case "ip":
   // Existing IP flags and JSON schema remain unchanged.
