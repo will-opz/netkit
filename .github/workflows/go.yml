@@ -1,7 +1,9 @@
 name: Go
+
 on:
   push:
   pull_request:
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -10,11 +12,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-      - name: Format report
-        run: gofmt -l cmd/ip-lookup/*.go
-      - name: Build
-        run: go build -o /tmp/ip-lookup ./cmd/ip-lookup/*.go
-      - name: Test
-        run: go test -v ./cmd/ip-lookup/*.go
+      - name: Formatting
+        run: |
+          gofmt -w cmd/netkit/*.go
+          git diff --exit-code -- cmd/netkit
+      - name: Tests
+        run: go test ./...
       - name: Vet
-        run: go vet ./cmd/ip-lookup/*.go
+        run: go vet ./...
+      - name: Build
+        run: go build -o /tmp/netkit ./cmd/netkit
+      - name: CLI smoke test
+        run: |
+          /tmp/netkit --help
+          /tmp/netkit ip --help
+          /tmp/netkit invalid >/tmp/netkit-err.txt 2>&1 && exit 1 || true
