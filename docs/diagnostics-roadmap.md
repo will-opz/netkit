@@ -131,5 +131,16 @@ No Homebrew Tap change: only an official tagged GitHub Release will trigger the 
 - [x] Differentiate HTTP transport timeout from other network errors.
 - [x] Accept `localhost` for explicit local TLS/TCP checks.
 - [x] Remove OS-specific `127.0.0.2` routing assumptions from TCP tests, injecting a deterministic dialer for simulated failures.
-- [ ] Further release engineering: tagged GitHub Release with artifact provenance, checksums and Tap update only on official release; no tag or Tap update in this pass.
+- [x] Prepare (without publishing) tagged GitHub Release workflow, five cross-platform archives, checksums, deterministic archive metadata, version/commit CLI and packaging dry-run.
+- [ ] Before official release: maintainer selects the NetKit source license; validate release asset download and signatures/provenance as needed. Homebrew Tap update remains a separate step **only after** formal tagged GitHub Release verification.
 - [ ] Consider future JSON schema versioning/JSONL and differentiated exit codes in an explicit compatibility release, not as a silent breaking change.
+
+### Release workflow preparation (2026-11-20)
+
+- [x] `netkit version` / `netkit --version` with optional build-time version/commit; JSON contract test.
+- [x] Python standard-library deterministic packaging for Linux amd64/arm64, macOS amd64/arm64, Windows amd64; SHA256 manifest and archive content validator.
+- [x] Release workflow: manual dispatch performs dry-run only; pushed strict `vMAJOR.MINOR.PATCH` tag publishes validated GitHub Release using its existing tag. No automatic Homebrew formula changes.
+- [x] Ordinary GitHub CI dry-runs packaging and checksum validation, with macOS and Ubuntu test jobs.
+- [ ] Confirm first-release license (top-level `LICENSE` currently absent); first official Tag, GitHub Release, binary download audit and Homebrew update require explicit separate action.
+
+Release instructions: [docs/releasing.md](releasing.md). Changelog: [CHANGELOG.md](../CHANGELOG.md).
