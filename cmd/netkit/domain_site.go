@@ -32,25 +32,6 @@ type WebsiteCheck struct {
  Error string `json:"error,omitempty"`
 }
 
-var commonMultiLabelSuffixes = map[string]bool{
- "co.uk":true,"org.uk":true,"ac.uk":true,
- "com.cn":true,"net.cn":true,"org.cn":true,
- "co.jp":true,"ne.jp":true,"or.jp":true,
- "com.au":true,"net.au":true,"org.au":true,
- "co.nz":true,"com.hk":true,"co.kr":true,"com.br":true,
-}
-
-// No standard-library public suffix list is available. This conservative
-// heuristic does not infer a parent for an explicitly supplied subdomain.
-func domainTargets(name string) []string {
- name=strings.TrimSuffix(strings.ToLower(name),".")
- parts:=strings.Split(name,".")
- apex:=len(parts)==2
- if len(parts)==3 {apex=commonMultiLabelSuffixes[strings.Join(parts[1:],".")]}
- if apex {return []string{name,"www."+name}}
- return []string{name}
-}
-
 var cdnCNAMEs = []struct{suffix,provider string}{
  {"cloudfront.net","Amazon CloudFront"},
  {"cdn.cloudflare.net","Cloudflare"},
