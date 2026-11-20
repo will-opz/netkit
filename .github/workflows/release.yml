@@ -37,6 +37,10 @@ jobs:
           else
             echo "NETKIT_VERSION=dev" >> "$GITHUB_ENV"
           fi
+      - name: Require project license for an official release
+        if: github.event_name == 'push'
+        run: |
+          test -s LICENSE || { echo "::error::Official release blocked: select and commit the NetKit project's top-level LICENSE first."; exit 1; }
       - name: Verify source
         run: |
           go test ./...
