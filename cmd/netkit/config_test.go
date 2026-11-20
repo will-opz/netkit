@@ -107,8 +107,10 @@ func TestConfigErrorsDoNotExposeSecrets(t *testing.T){
  settings,err:=loadAISettingsWithReader(func(string,string)(string,error){return "",errors.New("secret-sentinel")})
  if err==nil||settings.APIKey!=""{t.Fatalf("expected safe lookup failure: %v",err)}
  // A real macOS implementation replaces OS error details with a safe error.
- // The injected reader is tested separately, to ensure it is not swallowed.
- if !strings.Contains(err.Error(),"secret-sentinel"){t.Fatalf("unexpected error: %v",err)}
+ // The injected reader must not leak its diagnostic text to the user.
+ if strings.Contains(err.Error(),"secret-sentinel")||!strings.Contains(err.Error(),"Keychain credential unavailable"){
+  t.Fatalf("credential error leaked internal details: %v",err)
+ }
 }
 func TestConfigValidation(t *testing.T){
  c:=defaultLocalConfig()
