@@ -35,8 +35,11 @@ func keychainSecretExists(service,account string)(bool,error){
  // Never echo metadata or secret bytes.
  err:=cmd.Run()
  if ctx.Err()!=nil{return false,errors.New("Keychain status check timed out")}
- if err!=nil{return false,nil}
- return true,nil
+ if err==nil{return true,nil}
+ var exit *exec.ExitError
+ if errors.As(err,&exit)&&exit.ExitCode()==44{return false,nil} // errSecItemNotFound
+ return false,errors.New("Keychain status unavailable; check login Keychain access")
+
 }
 func storeKeychainSecret(service,account string)error{
  // -w without an argument prompts via the macOS security CLI. Do not
