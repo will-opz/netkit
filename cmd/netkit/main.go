@@ -119,7 +119,7 @@ func defaultCommandArgs(args []string) []string {
  if len(args)==1 {return append(args,"ip")}
  if len(args)>1 && !strings.HasPrefix(args[1],"-") {
   // Explicit subcommands win. A bare IP or domain is routed automatically.
-  switch args[1] {case "ip","dns","domain","tls","http","tcp","diagnose","version","help":return args}
+  switch args[1] {case "ip","dns","domain","tls","http","tcp","diagnose","config","version","help":return args}
   if net.ParseIP(args[1])!=nil {return append([]string{args[0],"ip"},args[1:]...)}
   if validDomain(args[1]) {return append([]string{args[0],"domain"},args[1:]...)}
  }
@@ -146,6 +146,7 @@ func printRootHelp() {
  fmt.Println("  netkit tcp example.com 443 本机 TCP 端口连通性")
  fmt.Println("  netkit diagnose example.com  DNS/TCP/TLS/HTTP 综合诊断")
  fmt.Println("  netkit version             查看构建版本与提交")
+ fmt.Println("  netkit config              管理本地配置与 macOS Keychain")
  fmt.Println("  netkit --output json       以 JSON 输出本机网络概览")
  fmt.Println()
  fmt.Println("子命令:")
@@ -157,6 +158,7 @@ func printRootHelp() {
  fmt.Println("  tcp     DNS 解析、TCP 端口连接与耗时")
  fmt.Println("  diagnose 统一网络证据与故障层定位（无需 AI）")
  fmt.Println("  version 显示构建版本及提交")
+ fmt.Println("  config  配置 AI 服务与安全凭据")
  fmt.Println()
  fmt.Println("通用查询选项（使用 netkit ip -h 查看完整说明）:")
  fmt.Println("  --output text|json   输出格式（默认 text）")
@@ -191,6 +193,9 @@ func main() {
   return
  }
  switch os.Args[1] {
+ case "config":
+  if err:=runConfig(os.Args[2:]);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  return
  case "diagnose":
   if err:=runDiagnose(os.Args[2:]);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
   return
