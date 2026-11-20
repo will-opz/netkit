@@ -87,6 +87,17 @@ func TestOpenAICompatibleAnalysis(t *testing.T){
  got,err:=analyzeWithAI(context.Background(),b,settings,server.Client())
  if err!=nil||got==nil||got.Summary!="TLS issue"||got.Model!="qwen3:8b"{t.Fatalf("analysis %+v: %v",got,err)}
 }
+func TestLocalAIAllowedForPrivateEvidence(t *testing.T){
+ b:=aiFixtureBundle()
+ b.Plan.Host="localhost"
+ server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  w.Header().Set("Content-Type","application/json")
+  w.Write([]byte(`{"choices":[{"message":{"content":"{\\"summary\\":\\"Local test\\",\\"evidence_ids\\":[\\"tls.1\\"],\\"hypotheses\\":[],\\"next_checks\\":[]}"}}]}`))
+ }))
+ defer server.Close()
+ got,err:=analyzeWithAI(context.Background(),b,AISettings{BaseURL:server.URL+"/v1",Model:"qwen3:8b",Timeout:time.Second},server.Client())
+ if err!=nil||got==nil{t.Fatalf("local model should allow private diagnosis: %v",err)}
+}
 func TestAIFailureIsolation(t *testing.T){
  b:=aiFixtureBundle()
  cases:=[]string{
