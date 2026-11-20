@@ -30,6 +30,10 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit dns list                            # 常用公共 DNS 清单
 ./netkit dns compare baidu.com               # 比较本机/Cloudflare/Google DNS 结果
 ./netkit dns compare --output json baidu.com # DNS 对比 JSON
+./netkit dns query -type SOA baidu.com        # 显示 RCODE、TTL 和 SOA（Cloudflare DoH）
+./netkit dns query -type CAA -provider google example.com # Google DoH CAA
+./netkit dns query -type SRV _sip._tcp.example.com # SRV 服务记录
+./netkit dns query --output json -type A example.com # 原始结构化 DNS 回答
 ./netkit tls example.com                     # TLS 握手、证书信任链、颁发者与到期时间
 ./netkit tls -port 8443 --output json example.com # 自定义端口和 JSON
 ./netkit http example.com                    # HTTP 状态和跳转链
@@ -67,6 +71,16 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## DNS deep diagnostics (O3 first milestone)
+
+`netkit dns query [-type TYPE] [-provider cloudflare|google] NAME` queries a public DNS-over-HTTPS JSON endpoint rather than the operating system's configured resolver. Supported types include A, AAAA, CNAME, NS, MX, TXT, SOA, CAA, SRV and PTR. The query reports the resolver **RCODE** (NOERROR, NXDOMAIN, SERVFAIL, REFUSED, etc.), each returned record's **TTL**, raw record data, Answer and Authority sections, response time, and DNS AD/CD/TC flags. The `_dmarc.example.com` and `_sip._tcp.example.com` names are accepted.
+
+Important distinctions:
+- `NOERROR` with an empty Answer is **not NXDOMAIN**; it may mean the requested type does not exist (NODATA), or additional records are in other sections.
+- The resolver's `AD` flag is reported as evidence **from that resolver**, not an independent DNSSEC validation by NetKit.
+- Network/HTTP errors and malformed DoH JSON are separate from DNS RCODE. Non-NOERROR answers remain visible in text and JSON and return nonzero exit status.
+- This command intentionally does **not** change `netkit dns compare`, `netkit dns` (system resolver inspection), or `netkit domain records`. Those retain their existing semantics. Cloudflare/Google only, no arbitrary remote endpoints and no third-party Go packages.
 
 ## HTTP phase timing and TCP all-address checks (O1/O2)
 
