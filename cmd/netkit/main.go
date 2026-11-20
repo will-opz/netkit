@@ -116,6 +116,12 @@ var providers = []provider{
 // Explicit help and future subcommands continue to use the existing dispatcher.
 func defaultCommandArgs(args []string) []string {
  if len(args)==1 {return append(args,"ip")}
+ if len(args)>1 && !strings.HasPrefix(args[1],"-") {
+  // Explicit subcommands win. A bare IP or domain is routed automatically.
+  switch args[1] {case "ip","dns","domain","help":return args}
+  if net.ParseIP(args[1])!=nil {return append([]string{args[0],"ip"},args[1:]...)}
+  if validDomain(args[1]) {return append([]string{args[0],"domain"},args[1:]...)}
+ }
  // Output is a global convenience flag for the default IP command.
  if len(args)>1 && (args[1]=="--output"||args[1]=="-output"||strings.HasPrefix(args[1],"--output=")||strings.HasPrefix(args[1],"-output=")) {
   return append([]string{args[0],"ip"},args[1:]...)
@@ -127,11 +133,18 @@ func printRootHelp() {
  fmt.Println()
  fmt.Println("用法:")
  fmt.Println("  netkit                     本机网络概览")
+ fmt.Println("  netkit <IP>                自动识别 IP 并查询")
+ fmt.Println("  netkit <域名>              自动识别域名并查询")
  fmt.Println("  netkit ip [选项] [IP ...]   查询指定 IPv4/IPv6")
+ fmt.Println("  netkit dns                 查看本机 DNS")
+ fmt.Println("  netkit dns list            查看常用公共 DNS")
+ fmt.Println("  netkit domain example.com  查询域名记录")
  fmt.Println("  netkit --output json       以 JSON 输出本机网络概览")
  fmt.Println()
  fmt.Println("子命令:")
  fmt.Println("  ip      多源 GeoIP、WHOIS 和本机网络信息")
+ fmt.Println("  dns     本机 DNS 配置和公共 DNS 目录")
+ fmt.Println("  domain  域名 DNS 解析")
  fmt.Println()
  fmt.Println("通用查询选项（使用 netkit ip -h 查看完整说明）:")
  fmt.Println("  --output text|json   输出格式（默认 text）")
@@ -152,6 +165,8 @@ func printRootHelp() {
  fmt.Println("  netkit ip 8.8.8.8")
  fmt.Println("  netkit ip --output json 8.8.8.8")
  fmt.Println("  netkit ip -all 8.8.8.8")
+ fmt.Println("  netkit dns list")
+ fmt.Println("  netkit www.baidu.com")
 }
 func main() {
  os.Args=defaultCommandArgs(os.Args)
@@ -159,8 +174,17 @@ func main() {
   printRootHelp()
   return
  }
- if os.Args[1]!="ip" {
-  fmt.Fprintln(os.Stderr,"未知子命令:",os.Args[1])
+ switch os.Args[1] {
+ case "dns":
+  if err:=runDNS(os.Args[2:]);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  return
+ case "domain":
+  if err:=runDomain(os.Args[2:]);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  return
+ case "ip":
+  // Existing IP flags and JSON schema remain unchanged.
+ default:
+  fmt.Fprintln(os.Stderr,"未知子命令或非法 IP/域名:",os.Args[1])
   fmt.Fprintln(os.Stderr,"Usage: netkit ip [options] [IPv4|IPv6 ...]")
   os.Exit(2)
  }
