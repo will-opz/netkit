@@ -61,6 +61,10 @@ func lookupDNSWithResolver(ctx context.Context,resolver *net.Resolver,name strin
  }
  return result
 }
+// The original Different field now also includes CNAME differences.
+func dnsResolverSignature(entry DNSResolverResult)string{
+ return strings.Join(entry.A,",")+"|"+strings.Join(entry.AAAA,",")+"|"+strings.ToLower(entry.CNAME)
+}
 func compareDNSResolvers(domain string,timeout time.Duration)DNSCompareReport {
  entries:=[]DNSResolverResult{
   {Name:"System"},
@@ -89,7 +93,7 @@ func compareDNSResolvers(domain string,timeout time.Duration)DNSCompareReport {
  different:=false
  for _,entry:=range entries{
   if entry.Error!=""{continue}
-  current:=strings.Join(entry.A,",")+"|"+strings.Join(entry.AAAA,",")
+  current:=dnsResolverSignature(entry)
   if !compared {signature=current;compared=true
   }else if current!=signature {different=true}
  }
@@ -124,8 +128,8 @@ func runDNSCompare(name string,timeout time.Duration,format,lang string,details 
  }
  if report.Detail!=nil {fmt.Print(formatDNSCompareDetail(*report.Detail,lang))}
  if report.Different{
-  if lang=="en"{fmt.Println("A/AAAA responses differ (this can be normal for CDN/GeoDNS).")
-  }else{fmt.Println("A/AAAA 结果存在差异（CDN/GeoDNS 场景可能是正常现象）。")}
+  if lang=="en"{fmt.Println("A/AAAA/CNAME responses differ (this can be normal for CDN/GeoDNS).")
+  }else{fmt.Println("A/AAAA/CNAME 结果存在差异（CDN/GeoDNS 场景可能是正常现象）。")}
  }
  return nil
 }
