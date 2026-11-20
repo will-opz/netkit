@@ -2,6 +2,7 @@ package main
 
 import (
  "context"
+ "fmt"
  "net/http"
  "strconv"
  "sort"
@@ -77,4 +78,26 @@ func addDNSCompareDetail(report *DNSCompareReport,domain,recordType string,timeo
  client:=&http.Client{Timeout:timeout}
  detail:=queryDNSCompareDetail(ctx,domain,recordType,client,defaultDNSCompareEndpoints())
  report.Detail=&detail
+}
+
+func formatDNSCompareDetail(detail DNSCompareDetail,lang string)string{
+ var b strings.Builder
+ if lang=="en"{fmt.Fprintf(&b,"DoH details (%s; public resolvers only, not system DNS):\n",detail.Type)
+ }else{fmt.Fprintf(&b,"DoH 详细对比（%s；仅公共解析器，不代表本机系统 DNS）：\n",detail.Type)}
+ for _,r:=range detail.Providers{
+  fmt.Fprintf(&b,"  %s | RCODE: %s",r.Provider,r.Status)
+  if r.Error!=""{fmt.Fprintf(&b," | Error: %s",r.Error)}
+  fmt.Fprintln(&b)
+  for _,a:=range r.Answers{fmt.Fprintf(&b,"    %-6s TTL=%ds %s\n",a.Type,a.TTL,a.Data)}
+ }
+ if detail.RCODEDifferent||detail.AnswerDifferent||detail.TTLDifferent{
+  if lang=="en"{fmt.Fprint(&b,"  Comparison: differences in ")
+  }else{fmt.Fprint(&b,"  对比差异：")}
+  parts:=[]string{}
+  if detail.RCODEDifferent{parts=append(parts,"RCODE")}
+  if detail.AnswerDifferent{parts=append(parts,"Answer")}
+  if detail.TTLDifferent{parts=append(parts,"TTL")}
+  fmt.Fprintln(&b,strings.Join(parts,", "))
+ }
+ return b.String()
 }
