@@ -1,0 +1,20 @@
+name: Go
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Format check
+        run: test -z "$(gofmt -l cmd/ip-lookup/*.go)"
+      - name: Build
+        run: go build -o /tmp/ip-lookup ./cmd/ip-lookup/*.go
+      - name: Test
+        run: go test -v ./cmd/ip-lookup/*.go
+      - name: Vet
+        run: go vet ./cmd/ip-lookup/*.go
