@@ -92,7 +92,7 @@ func TestLocalAIAllowedForPrivateEvidence(t *testing.T){
  b.Plan.Host="localhost"
  server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   w.Header().Set("Content-Type","application/json")
-  w.Write([]byte(`{"choices":[{"message":{"content":"{\\"summary\\":\\"Local test\\",\\"evidence_ids\\":[\\"tls.1\\"],\\"hypotheses\\":[],\\"next_checks\\":[]}"}}]}`))
+  w.Write([]byte(`{"choices":[{"message":{"content":"{\"summary\":\"Local test\",\"evidence_ids\":[\"tls.1\"],\"hypotheses\":[],\"next_checks\":[]}"}}]}`))
  }))
  defer server.Close()
  got,err:=analyzeWithAI(context.Background(),b,AISettings{BaseURL:server.URL+"/v1",Model:"qwen3:8b",Timeout:time.Second},server.Client())
