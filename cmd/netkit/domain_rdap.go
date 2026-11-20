@@ -99,16 +99,14 @@ func fetchDomainRegistration(client *http.Client,domain string,timeout time.Dura
  if status!=http.StatusOK{result.Error=fmt.Sprintf("IANA bootstrap HTTP %d",status);return result}
  base,err:=domainBootstrapURL(raw,domain)
  if err!=nil{result.Error=err.Error();return result}
- u,err:=url.Parse(base)
- if err!=nil{result.Error=err.Error();return result}
  // Query the given host, then its parents on 404: www.example.com is
  // generally not a registered domain. Never query the TLD alone.
  labels:=strings.Split(strings.TrimSuffix(strings.ToLower(domain),"."),".")
  for start:=0;start<len(labels)-1;start++{
   target:=strings.Join(labels[start:],".")
-  u.Path=strings.TrimSuffix(u.Path,"/")+"/domain/"+target
   // Always start from the original base; never append to a prior lookup.
-  baseURL,_:=url.Parse(base)
+  baseURL,err:=url.Parse(base)
+  if err!=nil {result.Error=err.Error();return result}
   baseURL.Path=strings.TrimSuffix(baseURL.Path,"/")+"/domain/"+target
   endpoint:=baseURL.String()
   result.RDAPURL=endpoint
