@@ -1,6 +1,7 @@
 package main
 
 import (
+ "context"
  "crypto/tls"
  "crypto/x509"
  "encoding/json"
@@ -31,8 +32,52 @@ type TLSReport struct {
  DurationMS int64 `json:"duration_ms"`
  VerificationError string `json:"verification_error,omitempty"`
  ConnectionError string `json:"connection_error,omitempty"`
+ VerificationCode string `json:"verification_code,omitempty"`
+ ConnectionCode string `json:"connection_code,omitempty"`
 }
 
+// Stable classifications preserve raw Go errors for diagnostics and JSON consumers.
+// A certificate may have multiple problems; the primary code uses validity,
+// then hostname, authority, usage, and finally other certificate errors.
+func classifyTLSVerification(err error,leaf *x509.Certificate,now time.Time)string{
+ if err==nil{return ""}
+ if leaf!=nil{
+  if now.Before(leaf.NotBefore){return "cert_not_yet_valid"}
+  if now.After(leaf.NotAfter){return "cert_expired"}
+ }
+ var hostnameErr x509.HostnameError
+ if errors.As(err,&hostnameErr){return "hostname_mismatch"}
+ var unknownCA x509.UnknownAuthorityError
+ if errors.As(err,&unknownCA){return "untrusted_authority"}
+ var invalid x509.CertificateInvalidError
+ if errors.As(err,&invalid){
+  switch invalid.Reason {
+  case x509.Expired:
+   if leaf!=nil && now.Before(leaf.NotBefore){return "cert_not_yet_valid"}
+   return "cert_expired"
+  case x509.IncompatibleUsage:return "invalid_key_usage"
+  default:return "invalid_certificate"
+  }
+ }
+ var rootsErr x509.SystemRootsError
+ if errors.As(err,&rootsErr){return "system_roots_error"}
+ return "certificate_verification_failed"
+}
+func classifyTLSConnection(err error)string{
+ if err==nil{return ""}
+ var networkErr net.Error
+ if errors.As(err,&networkErr)&&networkErr.Timeout(){return "timeout"}
+ if errors.Is(err,context.DeadlineExceeded){return "timeout"}
+ var recordErr tls.RecordHeaderError
+ if errors.As(err,&recordErr){return "tls_handshake_failed"}
+ var opErr *net.OpError
+ if errors.As(err,&opErr){
+  if opErr.Op=="dial"{return "tcp_connect_failed"}
+  // Post-connect TLS read/write failures may surface as net.OpError.
+  return "tls_handshake_failed"
+ }
+ return "tls_handshake_failed"
+}
 func tlsVersionName(version uint16)string{
  switch version {
  case tls.VersionTLS10:return "TLS 1.0"
@@ -57,7 +102,7 @@ func inspectTLS(host string,port int,timeout time.Duration)(report TLSReport){
   InsecureSkipVerify:true, // Intentional diagnostics; x509.Verify below.
   MinVersion:tls.VersionTLS10,
  })
- if err!=nil{report.ConnectionError=err.Error();return report}
+ if err!=nil{report.ConnectionError=err.Error();report.ConnectionCode=classifyTLSConnection(err);return report}
  defer connection.Close()
  state:=connection.ConnectionState()
  report.Connected=true
@@ -67,6 +112,7 @@ func inspectTLS(host string,port int,timeout time.Duration)(report TLSReport){
  report.ChainLength=len(state.PeerCertificates)
  if len(state.PeerCertificates)==0{
   report.VerificationError="no peer certificate"
+  report.VerificationCode="no_peer_certificate"
   return report
  }
  leaf:=state.PeerCertificates[0]
@@ -80,6 +126,7 @@ func inspectTLS(host string,port int,timeout time.Duration)(report TLSReport){
  roots,err:=x509.SystemCertPool()
  if err!=nil{
   report.VerificationError="system trust store: "+err.Error()
+  report.VerificationCode="system_roots_error"
   return report
  }
  if roots==nil {roots=x509.NewCertPool()}
@@ -92,7 +139,7 @@ func inspectTLS(host string,port int,timeout time.Duration)(report TLSReport){
   CurrentTime:time.Now(),
   KeyUsages:[]x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
  })
- if err!=nil {report.VerificationError=err.Error();return report}
+ if err!=nil {report.VerificationError=err.Error();report.VerificationCode=classifyTLSVerification(err,leaf,time.Now());return report}
  report.Verified=true
  return report
 }
@@ -132,6 +179,7 @@ func runTLS(args []string)error{
   fmt.Printf("%s: %s:%d\n",name("TLS 目标","TLS target"),report.Host,report.Port)
   if !report.Connected{
    fmt.Printf("  %s: %s\n",name("连接失败","Connection failed"),report.ConnectionError)
+   if report.ConnectionCode!=""{fmt.Printf("  %s: %s\n",name("错误类型","Error code"),report.ConnectionCode)}
   }else{
    fmt.Printf("  %s: %s | %s | %s: %dms\n",name("握手成功","Handshake OK"),report.TLSVersion,report.CipherSuite,name("耗时","Duration"),report.DurationMS)
    if report.ALPN!=""{fmt.Printf("  ALPN: %s\n",report.ALPN)}
@@ -140,6 +188,7 @@ func runTLS(args []string)error{
    fmt.Printf("  %s: %s\n",name("到期时间","Expires"),report.NotAfter)
    fmt.Printf("  %s: %d\n",name("剩余天数","Days remaining"),report.DaysRemaining)
    fmt.Printf("  %s: %t\n",name("证书有效","Certificate verified"),report.Verified)
+   if report.VerificationCode!=""{fmt.Printf("  %s: %s\n",name("验证类型","Verification code"),report.VerificationCode)}
    if report.VerificationError!=""{fmt.Printf("  %s: %s\n",name("验证错误","Verification error"),report.VerificationError)}
   }
  }
