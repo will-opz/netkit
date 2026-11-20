@@ -113,15 +113,40 @@ var providers = []provider{
 // Explicit help and future subcommands continue to use the existing dispatcher.
 func defaultCommandArgs(args []string) []string {
  if len(args)==1 {return append(args,"ip")}
+ // Output is a global convenience flag for the default IP command.
+ if len(args)>1 && (args[1]=="--output"||args[1]=="-output"||strings.HasPrefix(args[1],"--output=")||strings.HasPrefix(args[1],"-output=")) {
+  return append([]string{args[0],"ip"},args[1:]...)
+ }
  return args
+}
+func printRootHelp() {
+ fmt.Println("NetKit：网络诊断工具箱")
+ fmt.Println()
+ fmt.Println("用法:")
+ fmt.Println("  netkit                     本机网络概览")
+ fmt.Println("  netkit ip [选项] [IP ...]   查询指定 IPv4/IPv6")
+ fmt.Println("  netkit --output json       以 JSON 输出本机网络概览")
+ fmt.Println()
+ fmt.Println("子命令:")
+ fmt.Println("  ip      多源 GeoIP、WHOIS 和本机网络信息")
+ fmt.Println()
+ fmt.Println("通用查询选项（使用 netkit ip -h 查看完整说明）:")
+ fmt.Println("  --output text|json   输出格式（默认 text）")
+ fmt.Println("  -json                JSON 输出的兼容别名")
+ fmt.Println("  -all                 详细展示各来源结果")
+ fmt.Println("  -whois               仅查询 WHOIS")
+ fmt.Println("  -lang zh|en          输出语言（默认 zh）")
+ fmt.Println("  -timeout 5s          单请求超时")
+ fmt.Println()
+ fmt.Println("示例:")
+ fmt.Println("  netkit ip 8.8.8.8")
+ fmt.Println("  netkit ip --output json 8.8.8.8")
+ fmt.Println("  netkit ip -all 8.8.8.8")
 }
 func main() {
  os.Args=defaultCommandArgs(os.Args)
  if len(os.Args)<2 || os.Args[1]=="-h" || os.Args[1]=="--help" || os.Args[1]=="help" {
-  fmt.Println("NetKit：网络诊断工具箱")
-  fmt.Println("Usage: netkit ip [options] [IPv4|IPv6 ...]")
-  fmt.Println("子命令:\n  ip    多数据源 IP 信息与 WHOIS 查询")
-  fmt.Println("使用 netkit ip -h 查看参数；不指定 IP 时查看本机网卡、网关和公网 IP。")
+  printRootHelp()
   return
  }
  if os.Args[1]!="ip" {
@@ -132,7 +157,8 @@ func main() {
  os.Args=append([]string{os.Args[0]},os.Args[2:]...)
  all := flag.Bool("all", false, "显示各接口原始结果及 WHOIS")
  whoisOnly := flag.Bool("whois", false, "仅查询原生 WHOIS（TCP 43）")
- jsonFlag := flag.Bool("json", false, "输出 JSON（字段名固定为英文）")
+ jsonFlag := flag.Bool("json", false, "JSON 输出兼容别名（等同于 --output json）")
+ output := flag.String("output", "text", "输出格式：text（默认）或 json")
  timeout := flag.Duration("timeout", 5*time.Second, "每个请求的超时时间")
  lang := flag.String("lang", "zh", "输出语言：zh（默认中文）、en（英文）")
  flag.Usage = func() {
@@ -141,6 +167,8 @@ func main() {
   flag.PrintDefaults()
  }
  flag.Parse()
+ format,formatErr:=resolveOutputFormat(*output,*jsonFlag)
+ if formatErr!=nil {fmt.Fprintln(os.Stderr,formatErr);os.Exit(2)}
  *lang = strings.ToLower(strings.TrimSpace(*lang))
  if *lang!="zh" && *lang!="en" {fmt.Fprintln(os.Stderr,"-lang 仅支持 zh 或 en / supported: zh, en");os.Exit(2)}
  if *timeout <= 0 { fmt.Fprintln(os.Stderr, "超时时间必须大于 0"); os.Exit(2) }
@@ -148,7 +176,7 @@ func main() {
  ips := flag.Args()
  if len(ips)==0 {
   report:=inspectLocal(client,*timeout,*whoisOnly)
-  if *jsonFlag {
+  if format=="json" {
    b,err:=json.MarshalIndent(report,"","  ")
    if err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(1)}
    fmt.Println(string(b))
@@ -167,7 +195,7 @@ func main() {
   if seen[key] {continue};seen[key]=true
   results=append(results,lookup(client,key,*timeout,*whoisOnly))
  }
- if *jsonFlag {
+ if format=="json" {
   b,err:=json.MarshalIndent(results,"","  ")
   if err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(1)}
   fmt.Println(string(b))
@@ -177,6 +205,13 @@ func main() {
   }
  }
  if invalid||len(results)==0 {os.Exit(2)}
+}
+
+func resolveOutputFormat(output string,legacyJSON bool)(string,error) {
+ format:=strings.ToLower(strings.TrimSpace(output))
+ if format!="text"&&format!="json" {return "",fmt.Errorf("不支持的输出格式 %q：请使用 text 或 json",output)}
+ if legacyJSON {format="json"}
+ return format,nil
 }
 
 func getHTTP(ctx context.Context,client *http.Client,endpoint,accept string)([]byte,int,error){
