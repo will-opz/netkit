@@ -12,16 +12,25 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-      - name: Format report
-        run: gofmt -l cmd/netkit/*.go
+          cache: false
+      - name: Formatting advisory
+        run: |
+          files=$(gofmt -l cmd/netkit/*.go)
+          if [ -n "$files" ]; then
+            echo 'Formatting suggestions (run make fmt locally):'
+            echo "$files"
+          fi
+      - name: Compile
+        run: go build -o /tmp/netkit ./cmd/netkit
       - name: Tests
         run: go test ./...
       - name: Vet
         run: go vet ./...
-      - name: Build
-        run: go build -o /tmp/netkit ./cmd/netkit
       - name: CLI smoke test
         run: |
           /tmp/netkit --help
           /tmp/netkit ip --help
-          /tmp/netkit invalid >/tmp/netkit-err.txt 2>&1 && exit 1 || true
+          /tmp/netkit dns list --output json > /tmp/public-dns.json
+          /tmp/netkit ip -cidr 192.168.31.158/24 > /tmp/cidr.txt
+          /tmp/netkit ip 192.168.1.1 > /tmp/private.txt
+          if /tmp/netkit invalid >/tmp/netkit-err.txt 2>&1; then exit 1; fi
