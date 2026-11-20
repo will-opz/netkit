@@ -1,48 +1,67 @@
 # NetKit
 
-A zero-dependency Go network diagnostics toolkit. **V1: `ip-lookup`** aggregates GeoIP information and native WHOIS registration data.
+Zero-external-dependency Go network diagnostics CLI. V1 provides multi-source IP geolocation and WHOIS registration lookup with fault isolation.
 
 ## Build
 
-Go 1.20+:
+Go 1.23+:
 
 ```sh
-go build -o ip-lookup ./cmd/ip-lookup
+git clone https://github.com/will-opz/netkit.git
+cd netkit
+go build -o netkit ./cmd/netkit
 ```
 
 ## Usage
 
 ```sh
-./ip-lookup                            # discover and look up public IP
-./ip-lookup 1.1.1.1 8.8.8.8            # multiple IPv4 / IPv6 targets
-./ip-lookup -all 1.1.1.1               # per-source response and WHOIS text
-./ip-lookup -whois 1.1.1.1             # native TCP/43 only
-./ip-lookup -json 1.1.1.1              # machine-readable output
-./ip-lookup -timeout 8s 1.1.1.1       # per-source timeout
+./netkit --help
+./netkit ip                                   # discover public IP
+./netkit ip 8.8.8.8                           # one-line summary
+./netkit ip 8.8.8.8 1.1.1.1                   # one line per IP
+./netkit ip -all 8.8.8.8                      # full WHOIS and per-provider JSON
+./netkit ip -whois 8.8.8.8                    # TCP 43 only
+./netkit ip -json 8.8.8.8                     # machine-readable output
+./netkit ip -timeout 8s 2001:4860:4860::8888
 ```
+
+Note: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+### Compact output
+
+By default, each IP produces **exactly one line**, suitable for terminals and batch scripts. Example of the format (illustrative, not live results):
+
+```text
+8.8.8.8 | 美国 | AS15169 | Google LLC | Hosting: Yes | Sources: 4/4 | WHOIS: OK
+```
+
+`Sources: 4/4` counts successful HTTP providers; it **does not mean all four agree**. If reported country/region/city/ASN differs, a difference indicator is appended. `Hosting: Unknown` means no provider supplied a detection; it is not equivalent to `No`.
+
+`-all` preserves the detailed, multi-line original results for troubleshooting. `-json` returns structured reports, including field-level agreements, alternatives and WHOIS.
 
 ## Data sources
 
-- ip-api.com (`http://` free endpoint; **unencrypted**)
+- ip-api.com (free API uses **unencrypted HTTP**)
 - ipwho.is
 - ipinfo.io
 - api.ip.sb
-- IANA → RIR WHOIS over TCP port 43 (no system `whois` command)
-- Public IP discovery: api.ipify.org, ifconfig.me/ip, icanhazip.com
+- IANA / RIR WHOIS over native TCP/43, with bounded recursive referrals
+- Public IP discovery fallback: api.ipify.org, ifconfig.me/ip, icanhazip.com
 
-HTTP sources and WHOIS run concurrently. A failing API does not suppress successful sources. Country/region/city/ASN/ISP/organization are compared per field; `agreements` records contributing providers and disagreements. Agreement across API responses **does not prove independent databases or accuracy**. GeoIP locations are estimates; WHOIS country denotes registration and may not be physical location. Missing proxy/hosting detections remain unknown. Providers have their own terms and rate limits.
-
-WHOIS traversal is capped at four registry hops and a bounded total duration, and referrals are restricted to known RIR hosts.
-
-## Roadmap
-
-- V1.1: stdin/batch mode, request concurrency limits, tests/CI, caching and rate-limit awareness.
-- V2: RDAP, ASN and DNS resolver comparisons.
-- V3: TCP/TLS, HTTP, traceroute and network diagnostics.
+GeoIP endpoints are queried concurrently alongside WHOIS, with independent timeouts and error reporting. WHOIS registration country is not a geolocation. Multiple agreeing API responses are not necessarily independent data sets; provider limits and terms still apply.
 
 ## Development
 
 ```sh
 go test ./...
 go vet ./...
+go build ./cmd/netkit
 ```
+
+## Roadmap
+
+- V1.1: stdin/batch input, field selection, bounded concurrent batch queries, caching and provider health checks.
+- V2: RDAP, ASN and DNS.
+- V3: TCP/TLS/HTTP diagnostics and traceroute.
+
+Design inspirations for future versions: [ipinfo/cli](https://github.com/ipinfo/cli) (CLI and batch UX), [zu1k/nali](https://github.com/zu1k/nali) (offline sources and multi-result presentation), [openrdap/rdap](https://github.com/openrdap/rdap) (registration data and bootstrap).
