@@ -44,7 +44,7 @@ type dohAnswer struct {
  Data string `json:"data"`
 }
 type dohResponse struct {
- Status int `json:"Status"`
+ Status *int `json:"Status"`
  TC bool `json:"TC"`
  AD bool `json:"AD"`
  CD bool `json:"CD"`
@@ -115,11 +115,11 @@ func performDNSQuery(ctx context.Context,client *http.Client,endpoint,provider,n
  var payload dohResponse
  decoder:=json.NewDecoder(io.LimitReader(resp.Body,1<<20))
  if err:=decoder.Decode(&payload);err!=nil{report.Error="invalid DoH JSON: "+err.Error();return report}
- if payload.Status<0||payload.Status>4095{
+ if payload.Status==nil||*payload.Status<0||*payload.Status>4095{
   report.Error="invalid DNS RCODE";return report
  }
- report.RCODE=payload.Status
- report.Status=dnsRCODEName(payload.Status)
+ report.RCODE=*payload.Status
+ report.Status=dnsRCODEName(*payload.Status)
  report.Truncated=payload.TC
  report.AuthenticData=payload.AD
  report.CheckingDisabled=payload.CD
