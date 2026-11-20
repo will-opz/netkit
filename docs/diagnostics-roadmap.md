@@ -148,7 +148,7 @@ Release instructions: [docs/releasing.md](releasing.md). Changelog: [CHANGELOG.m
 
 ## Planned diagnose and optional AI integration (2026-11-20 design decision)
 
-**Status: design approved for roadmap; not implemented.** Preserve the zero-third-party-Go-dependency CLI and all existing deterministic commands. AI is **opt-in**, never a prerequisite for ordinary CLI commands or diagnostic measurements. Both local Qwen/Ollama/llama.cpp and commercial API/NewAPI use a **single OpenAI-compatible Chat Completions client**. Select provider through base URL, model and API-key environment variable, not provider-specific business logic. Compatibility varies: validate supported structured-output behavior per backend, with application-level schema and evidence-ID validation even when the model offers JSON mode.
+**Status: A0 and initial A1 transport implemented; model-quality and real-provider testing pending.** Preserve the zero-third-party-Go-dependency CLI and all existing deterministic commands. AI is **opt-in**, never a prerequisite for ordinary CLI commands or diagnostic measurements. Both local Qwen/Ollama/llama.cpp and commercial API/NewAPI use a **single OpenAI-compatible Chat Completions client**. Select provider through base URL, model and API-key environment variable, not provider-specific business logic. Compatibility varies: validate supported structured-output behavior per backend, with application-level schema and evidence-ID validation even when the model offers JSON mode.
 
 ### Delivery sequence
 
@@ -192,7 +192,18 @@ Release instructions: [docs/releasing.md](releasing.md). Changelog: [CHANGELOG.m
 - [x] JSON `EvidenceBundle` schema v1 with observer, timestamp, `DiagnosticPlan`, stage IDs, stage evidence and first confirmed failing layer; English keys and bilingual terminal summary.
 - [x] Deterministic `failed`, `degraded` and `skipped` stages; preserve raw TCP/TLS/HTTP result structs without changing existing commands; no AI calls.
 - [x] Mocked/isolated offline tests for valid/invalid targets, sequential stage failures, restricted HTTP, consistent evidence IDs and JSON; CI smoke test with local loopback target.
-- [ ] A1 optional AI summary: uniform OpenAI-compatible API client, strict evidence references, opt-in redaction and failure isolation.
+- [x] A1 initial implementation: one OpenAI-compatible Chat Completions client for OpenAI/local Qwen/NewAPI, environment-only API key, explicit `-ai` opt-in, sanitized evidence, evidence-ID validation, and graceful `ai_error` fallback.
+- [ ] A1 field validation: test against real authorized OpenAI and Qwen model IDs/response behavior, evaluate quality on labeled 20–30 case corpus, and consider JSON schema capability negotiation per provider. No real API credentials are committed.
 - [ ] A0 follow-up: explicit per-IP pinning across DNS/TCP/TLS/HTTP for comparable CDN/backend tracing; current independent TLS/HTTP probes can reach different resolved IPs.
 
 Use `netkit diagnose --output json example.com` to inspect the evidence contract before A1.
+
+### OpenAI-compatible A1 transport (2026-11-20)
+
+- [x] `netkit diagnose -ai TARGET` runs deterministic probes first, then optionally obtains a separate AI explanation. `ai_analysis` cannot change first-failure classification or network evidence.
+- [x] Default API base URL: `https://api.openai.com/v1`; compatible local Ollama and NewAPI selected via `NETKIT_AI_BASE_URL`, `NETKIT_AI_MODEL`, `NETKIT_AI_API_KEY`. No key embedded in source. Local loopback inference supports HTTP without a key; remote transport requires HTTPS and a key.
+- [x] AI payload allowlist, private/internal target guard for remote API, response length and field checks, validation of evidence IDs, disabled redirects and isolated `ai_error` on errors.
+- [x] Local `httptest` fixtures for compatible JSON Chat Completions response, privacy, missing key and invalid evidence references.
+- [ ] Real API integration requires a locally configured authorized API key and explicit acceptance testing; evaluate responses for different model families before declaring production-ready.
+
+The Homebrew Tap remains unchanged until a separately approved, verified tagged release.
