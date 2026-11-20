@@ -88,8 +88,8 @@ func dohProviderEndpoint(provider string)(string,string,error){
  default:return "","",fmt.Errorf("unsupported DNS provider %q: choose cloudflare or google",provider)
  }
 }
-func performDNSQuery(ctx context.Context,client *http.Client,endpoint,provider,name,recordType string)DNSQueryReport{
- report:=DNSQueryReport{
+func performDNSQuery(ctx context.Context,client *http.Client,endpoint,provider,name,recordType string)(report DNSQueryReport){
+ report=DNSQueryReport{
   Name:name,Type:recordType,Provider:provider,Endpoint:endpoint,
   Status:"UNKNOWN",RCODE:-1,
   Answers:[]DNSQueryRecord{},Authority:[]DNSQueryRecord{},
@@ -139,20 +139,33 @@ func executeDNSQuery(name,recordType,provider string,timeout time.Duration,clien
 }
 func validDNSQueryName(raw string)bool{
  if validDomain(raw){return true}
- // Permit underscore-prefixed service and policy labels, not arbitrary URLs.
- parts:=strings.Split(strings.TrimSuffix(raw,"."),".")
+ // Permit underscore-prefixed service labels such as _dmarc, _sip._tcp.
+ // Validate every label and do not accept whitespace, URLs or trailing junk.
+ name:=strings.TrimSuffix(raw,".")
+ if len(name)<3||len(name)>253||strings.ContainsAny(name,":/@\\ \\t\\r\\n"){return false}
+ parts:=strings.Split(name,".")
  if len(parts)<3{return false}
- if len(raw)>253{return false}
+ hasUnderscore:=false
  for i,label:=range parts{
-  if i==len(parts)-1{break}
+  if label==""||len(label)>63{return false}
+  if i==len(parts)-1 {
+   if len(label)<2{return false}
+  }
   if strings.HasPrefix(label,"_"){
-   if len(label)<2 {return false}
-   for _,c:=range label[1:]{
-    if !(c>='a'&&c<='z'||c>='A'&&c<='Z'||c>='0'&&c<='9'||c=='-'){return false}
-   }
-  }else if label==""||len(label)>63{return false}
+   if i==len(parts)-1||len(label)<2{ return false }
+   hasUnderscore=true
+   label=label[1:]
+  }
+  if label[0]=='-'||label[len(label)-1]=='-'{return false}
+  for _,c:=range label{
+   if !(c>='a'&&c<='z'||c>='A'&&c<='Z'||c>='0'&&c<='9'||c=='-'){return false}
+  }
  }
- return validDomain(strings.Join(parts[len(parts)-2:],""))
+ if !hasUnderscore {return false}
+ tld:=parts[len(parts)-1]
+ digits:=true
+ for _,c:=range tld{if c<'0'||c>'9'{digits=false;break}}
+ return !digits
 }
 func dnsQueryHelp(){
  fmt.Println("用法: netkit dns query [-type A|AAAA|CNAME|MX|NS|TXT|SOA|CAA|SRV] [-provider cloudflare|google] [-timeout 5s] [--output text|json] [-lang zh|en] DOMAIN")
