@@ -5,6 +5,7 @@ import (
  "fmt"
  "net"
  "net/http"
+ "net/url"
  "strings"
  "sync"
  "time"
@@ -29,6 +30,8 @@ type WebsiteCheck struct {
  LatencyMS int64 `json:"latency_ms,omitempty"`
  TLS bool `json:"tls"`
  CDN CDNInfo `json:"cdn"`
+ DNSCDN *CDNInfo `json:"dns_cdn,omitempty"`
+ responseHeaders http.Header
  Error string `json:"error,omitempty"`
 }
 
@@ -99,7 +102,8 @@ func probeWebsite(ctx context.Context,client *http.Client,host string)WebsiteChe
   result.LatencyMS=elapsed
   result.TLS=response.TLS!=nil
   result.Error=""
-  result.CDN=detectCDN("",response.Header)
+  result.responseHeaders=response.Header.Clone()
+  result.CDN=detectCDN("",result.responseHeaders)
   break
  }
  return result
@@ -137,15 +141,19 @@ func checkWebsiteHost(name string,timeout time.Duration) WebsiteCheck{
  result=probeWebsite(ctx,client,name)
  wg.Wait()
  result.CNAME=cname
- if result.CDN.Provider!="" {
-  cnameProvider:=knownCDNCNAME(cname)
-  if cnameProvider!=""&&cnameProvider!=result.CDN.Provider {
-   result.CDN=CDNInfo{Confidence:"conflict",Evidence:append([]string{"CNAME: "+cname},result.CDN.Evidence...)}
-  }else if cnameProvider!="" {
-   result.CDN=CDNInfo{Provider:cnameProvider,Confidence:"cname",Evidence:append([]string{"CNAME: "+cname},result.CDN.Evidence...)}
-  }
+ // CNAME belongs to the requested hostname, but HTTP response headers may
+ // belong to the final redirected hostname. Keep these as distinct evidence
+ // rather than reporting a false CDN conflict across separate hosts.
+ dnsEvidence:=detectCDN(cname,nil)
+ redirectedHost:=""
+ if result.FinalURL!=""{
+  if u,err:=url.Parse(result.FinalURL);err==nil{redirectedHost=u.Hostname()}
+ }
+ if redirectedHost!=""&&!strings.EqualFold(redirectedHost,name){
+  if dnsEvidence.Provider!=""{result.DNSCDN=&dnsEvidence}
+  result.CDN=detectCDN("",result.responseHeaders)
  }else{
-  result.CDN=detectCDN(cname,nil)
+  result.CDN=detectCDN(cname,result.responseHeaders)
  }
  return result
 }
@@ -201,6 +209,7 @@ func formatWebsiteReport(results []WebsiteCheck,lang string)string{
   if w.StatusCode!=0{fmt.Fprintf(&out," (HTTP %d)",w.StatusCode)}
   if w.Reachable{fmt.Fprintf(&out," | %dms",w.LatencyMS)}
   fmt.Fprintf(&out," | CDN: %s\n",cdnText(w.CDN,lang))
+  if w.DNSCDN!=nil {fmt.Fprintf(&out,"    DNS CNAME CDN (%s): %s\n",w.Host,cdnText(*w.DNSCDN,lang))}
   if w.FinalURL!=""&&w.FinalURL!="https://"+w.Host+"/"{fmt.Fprintf(&out,"    URL: %s\n",w.FinalURL)}
   if w.Error!="" {fmt.Fprintf(&out,"    %s: %s\n",map[bool]string{true:"原因",false:"Error"}[lang=="zh"],w.Error)}
  }
