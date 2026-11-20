@@ -29,6 +29,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit dns --output json                   # 本机 DNS 配置 JSON
 ./netkit dns list                            # 常用公共 DNS 清单
 ./netkit dns compare baidu.com               # 比较本机/Cloudflare/Google DNS 结果
+./netkit dns compare -detail -type A baidu.com # 追加 DoH RCODE/TTL/Answer 对比
+./netkit dns compare -detail -type CNAME --output json baidu.com # 对比 JSON
 ./netkit dns compare --output json baidu.com # DNS 对比 JSON
 ./netkit dns query -type SOA baidu.com        # 显示 RCODE、TTL 和 SOA（Cloudflare DoH）
 ./netkit dns query -type CAA -provider google example.com # Google DoH CAA
@@ -71,6 +73,12 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## DNS resolver comparison (O3 phase 2)
+
+`netkit dns compare DOMAIN` continues to compare system, Cloudflare and Google resolution results, with an additional CNAME comparison. `netkit dns compare -detail -type A DOMAIN` **optionally** adds Cloudflare/Google DoH JSON answers, independent DNS RCODE, TTL and record-data comparisons. `-type` supports the same DNS record types as `dns query`, including SOA, CAA and SRV; `--output json` adds an optional `detail` object without changing older fields.
+
+The OS `net.Resolver` cannot expose raw RCODE/TTL: the detailed section therefore **does not** claim to be an OS DNS observation. DoH requests are separately timed, and a network failure is not treated as conflicting DNS data. TTLs are cache-sensitive and different public DNS/CDN answers may be normal; differences alone do not establish DNS pollution. The default compare mode remains unchanged apart from considering differences in CNAME as well as A/AAAA.
 
 ## DNS deep diagnostics (O3 first milestone)
 
