@@ -2,6 +2,9 @@ package main
 
 import (
  "crypto/tls"
+ "crypto/x509"
+ "context"
+ "errors"
  "net"
  "net/http"
  "net/http/httptest"
@@ -46,4 +49,48 @@ func TestInspectTLSConnectionFailure(t *testing.T){
  got:=inspectTLS("127.0.0.1",address.Port,300*time.Millisecond)
  if got.Connected||got.ConnectionError=="" {t.Fatalf("expected failed handshake: %+v",got)}
  if strings.Contains(got.ConnectionError,"certificate") {t.Fatalf("network error reported as certificate error: %+v",got)}
+}
+
+func TestTLSVerificationClassification(t *testing.T){
+ now:=time.Date(2026,time.November,20,0,0,0,0,time.UTC)
+ leaf:=&x509.Certificate{NotBefore:now.Add(-24*time.Hour),NotAfter:now.Add(24*time.Hour)}
+ tests:=[]struct{name string;err error;cert *x509.Certificate;want string}{
+  {"hostname",x509.HostnameError{Certificate:leaf,Host:"wrong.example"},leaf,"hostname_mismatch"},
+  {"untrusted",x509.UnknownAuthorityError{Cert:leaf},leaf,"untrusted_authority"},
+  {"invalid usage",x509.CertificateInvalidError{Cert:leaf,Reason:x509.IncompatibleUsage},leaf,"invalid_key_usage"},
+  {"other certificate",x509.CertificateInvalidError{Cert:leaf,Reason:x509.NotAuthorizedToSign},leaf,"invalid_certificate"},
+  {"other verify",errors.New("unknown verification issue"),leaf,"certificate_verification_failed"},
+  {"expired",x509.UnknownAuthorityError{Cert:leaf},&x509.Certificate{NotBefore:now.Add(-48*time.Hour),NotAfter:now.Add(-time.Hour)},"cert_expired"},
+  {"not yet valid",x509.UnknownAuthorityError{Cert:leaf},&x509.Certificate{NotBefore:now.Add(time.Hour),NotAfter:now.Add(48*time.Hour)},"cert_not_yet_valid"},
+  {"roots",x509.SystemRootsError{Err:errors.New("missing roots")},leaf,"system_roots_error"},
+ }
+ for _,tc:=range tests{
+  t.Run(tc.name,func(t *testing.T){
+   if got:=classifyTLSVerification(tc.err,tc.cert,now);got!=tc.want{
+    t.Fatalf("got %q want %q",got,tc.want)
+   }
+  })
+ }
+ if got:=classifyTLSVerification(nil,leaf,now);got!=""{t.Fatalf("success classified as %s",got)}
+}
+func TestTLSConnectionClassification(t *testing.T){
+ ctx,cancel:=context.WithCancel(context.Background());defer cancel()
+ if got:=classifyTLSConnection(context.DeadlineExceeded);got!="timeout"{t.Fatalf("deadline: %s",got)}
+ if got:=classifyTLSConnection(&net.OpError{Op:"dial",Err:errors.New("connection refused")});got!="tcp_connect_failed"{t.Fatalf("dial: %s",got)}
+ if got:=classifyTLSConnection(tls.RecordHeaderError{Msg:"not a TLS server"});got!="tls_handshake_failed"{t.Fatalf("record: %s",got)}
+ if got:=classifyTLSConnection(nil);got!=""{t.Fatalf("success classified: %s",got)}
+ _=ctx
+}
+func TestTLSLocalClassificationIntegration(t *testing.T){
+ server:=httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.WriteHeader(http.StatusOK)}))
+ defer server.Close()
+ host,portText,err:=net.SplitHostPort(server.Listener.Addr().String())
+ if err!=nil{t.Fatal(err)}
+ port,err:=net.LookupPort("tcp",portText)
+ if err!=nil{t.Fatal(err)}
+ result:=inspectTLS(host,port,3*time.Second)
+ if !result.Connected||result.Verified||result.VerificationCode!="untrusted_authority"{
+  t.Fatalf("self-signed certificate: %+v",result)
+ }
+ if result.ConnectionCode!=""{t.Fatalf("handshake succeeded but connection error code set: %+v",result)}
 }
