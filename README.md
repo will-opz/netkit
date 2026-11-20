@@ -51,6 +51,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit http example.com                    # HTTP 状态和跳转链
 ./netkit http --output json https://example.com/path # HTTP 逐跳 JSON（含 DNS/TCP/TLS/TTFB 阶段）
 ./netkit tcp example.com 443                 # DNS + TCP 连接诊断
+./netkit diagnose example.com                # 统一 DNS/TCP/TLS/HTTP 本地证据
+./netkit diagnose --output json https://example.com # AI-ready 结构化证据
 ./netkit tcp -all-ips example.com 443        # 逐个检测所有 A/AAAA 地址
 ./netkit tcp --output json 127.0.0.1 5432    # 本地服务 TCP JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
@@ -83,6 +85,24 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## Deterministic comprehensive diagnosis (A0)
+
+`netkit diagnose HOST|URL` performs a bounded sequence of **local** DNS → TCP → TLS (HTTPS only) → HTTP probes. No AI model, API key or network service is needed beyond the target itself. The command accepts a host, IP, or the HTTP/HTTPS root URL, optionally with an explicit port; URL paths/queries are deliberately rejected in this initial version (use `netkit http` for them). Existing `netkit <domain>` still checks apex and www as before, while `diagnose` checks **only the specified host**.
+
+Examples:
+
+```sh
+./netkit diagnose example.com
+./netkit diagnose -timeout 8s --output json https://example.com
+./netkit diagnose --output json http://127.0.0.1:8080
+```
+
+The JSON `EvidenceBundle` includes `schema_version: "1"`, `plan`, `observed_at`, `observer: "local_machine"`, ordered `stages` with stable IDs (`dns.1`, `tcp.1`, `tls.1`, `http.1`), `status` and optional `first_failure`. Stage evidence wraps existing `TCPReport`, `TLSReport` and `HTTPReport` without changing their original JSON schemas. DNS uses the **system resolver**; its API does not provide native RCODE or TTL. TLS and HTTP remain independently connected probes and can reach **different backends** in multi-IP/CDN deployments; never mistake the combined report for a single pinned-endpoint trace.
+
+When a layer fails, dependent stages are `skipped` with a reason; an HTTP access restriction yields `degraded`, not `failed`, and the raw evidence remains visible. Failed diagnoses return a nonzero process exit code **after emitting JSON**. Unknown causes are not inferred. Per-stage `-timeout` is bounded by the overall invocation budget.
+
+This typed, versioned bundle is the proposed input for the **optional future** unified OpenAI-compatible AI Analyzer. No model calls, natural-language planner or autonomous follow-up probes are implemented in A0.
 
 ## DNS resolver comparison (O3 phase 2)
 
