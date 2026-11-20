@@ -23,6 +23,14 @@ Use `make deploy` to build and install to `~/.local/bin/netkit` (creates the dir
 ```sh
 ./netkit --help                              # 总帮助：子命令、选项、示例
 ./netkit --output json                      # 本机网络概览 JSON
+./netkit 192.168.1.1                         # 自动识别 IP，等同 netkit ip 192.168.1.1
+./netkit www.baidu.com                       # 自动识别域名，等同 netkit domain www.baidu.com
+./netkit dns                                 # 本机 DNS 配置
+./netkit dns --output json                   # 本机 DNS 配置 JSON
+./netkit dns list                            # 常用公共 DNS 清单
+./netkit dns list --output json              # 公共 DNS 清单 JSON
+./netkit domain example.com                  # 查询 A/AAAA/CNAME/MX/NS/TXT
+./netkit domain --output json example.com   # 域名查询 JSON
 ./netkit                                      # 等同于 netkit ip，显示本机内外网、网关
 ./netkit ip                                   # 本机接口、内网地址、默认网关与公网信息
 ./netkit ip 192.168.1.1                       # 本地分类，不请求公网 GeoIP / WHOIS
@@ -47,6 +55,14 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## Smart command routing and DNS / domain (V1)
+
+- **Automatic routing:** `netkit <IPv4|IPv6>` is equivalent to `netkit ip <IP>`, while `netkit example.com` is equivalent to `netkit domain example.com`. Explicit `ip`, `dns`, `domain` subcommands take priority. Bare `netkit` still shows the local network overview. Domain auto-detection accepts ASCII/Punycode hostnames; URLs and Unicode IDNs are not accepted directly.
+- **System DNS:** `netkit dns` shows resolver addresses and metadata. On macOS it reads `scutil --dns` (including supplemental and scoped resolver entries), with a fallback to `/etc/resolv.conf`. On Linux it reads `/etc/resolv.conf`. Displayed settings are configuration evidence, not proof of the actual server used by every app or encrypted DNS client.
+- **Public DNS directory:** `netkit dns list` prints fixed reference addresses for Cloudflare, Google, Quad9 and AdGuard (IPv4/IPv6 and DoH URL). This is not a live availability, speed or security assessment.
+- **Domain records:** `netkit domain example.com` concurrently queries the system resolver for A, AAAA, CNAME, MX, NS and TXT, using a per-type timeout. Missing/failed records are reported independently and included in JSON `errors`. Output supports `--output json`, `-lang zh|en`. Options must precede the domain due to Go standard flag parsing.
+- Both modules use Go's standard library only. Native custom DNS-server selection, DNSSEC validation and detailed authoritative trace are future enhancements.
 
 ### IP 类型和本机网络检查
 
