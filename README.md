@@ -10,11 +10,11 @@ Requires Go 1.23+ and Make. Clone once, then run `make` whenever you want to upd
 git clone https://github.com/will-opz/netkit.git
 cd netkit
 make                  # git pull --ff-only + go build -o netkit ./cmd/netkit
-make deploy           # install ~/.local/bin/netkit
-~/.local/bin/netkit
+make deploy           # Homebrew Tap install/upgrade (published version)
+netkit
 ```
 
-Use `make deploy` to build and install to `~/.local/bin/netkit` (creates the directory if needed, no sudo, does not pull). Use `make build` to compile without pulling, `make check` for tests and vet, `make fmt` to format sources, and `make help` for the list. If `~/.local/bin` is on your `PATH`, invoke `netkit` directly; otherwise use `~/.local/bin/netkit`. Override the install directory with `make deploy INSTALL_DIR=/custom/path`. Updates are fast-forward only; `make` refuses to pull when tracked files contain uncommitted changes. The generated `./netkit` binary stays ignored by Git.
+Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` formula through Homebrew. This requires Homebrew and does not deploy or compile your uncommitted local source. Use `make build` for a local development build; `make check` for tests and vet, `make fmt` to format sources, and `make help` for the list. Run `brew update && brew upgrade will-opz/tap/netkit` directly if preferred. Updates are fast-forward only; `make` refuses to pull when tracked files contain uncommitted changes. The generated `./netkit` binary stays ignored by Git.
 
 
 
