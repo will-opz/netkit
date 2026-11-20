@@ -495,7 +495,7 @@ var messages = map[string]map[string]string{
   "whoisError":"WHOIS 错误","whoisRaw":"WHOIS 原始数据","error":"错误",
   "yes":"是","no":"否","unknown":"未知","unavailable":"不可用",
   "sources":"数据源","geoDifference":"GeoIP 差异","sourceFailure":"GeoIP 全部失败",
-  "addressType":"地址类型","localNoQuery":"跳过公网 GeoIP/WHOIS","host":"主机名","localIP":"本机出口内网 IP","interfaces":"网络接口","gateways":"默认网关","publicIP":"公网 IP","publicDetail":"公网信息","warnings":"提示","unavailableGW":"未能检测默认网关",
+  "addressType":"地址类型","localNoQuery":"跳过公网 GeoIP/WHOIS","host":"主机名","localIP":"本机出口内网 IP","interfaces":"网络接口","gateways":"默认网关","publicIP":"公网 IP","publicDetail":"公网信息","warnings":"提示","unavailableGW":"未能检测默认网关","networkOverview":"本机网络概览","hiddenInterfaces":"已隐藏 %d 个其他接口（-all 查看）",
  },
  "en": {
   "country":"Country","region":"Region","city":"City","organization":"Organization","timezone":"Timezone",
@@ -505,7 +505,7 @@ var messages = map[string]map[string]string{
   "whoisError":"WHOIS error","whoisRaw":"WHOIS raw","error":"Error",
   "yes":"Yes","no":"No","unknown":"Unknown","unavailable":"N/A",
   "sources":"Sources","geoDifference":"GeoIP mismatch","sourceFailure":"All GeoIP sources failed",
-  "addressType":"Address type","localNoQuery":"Public GeoIP/WHOIS skipped","host":"Hostname","localIP":"Local outbound IP","interfaces":"Interfaces","gateways":"Default gateways","publicIP":"Public IP","publicDetail":"Public details","warnings":"Warnings","unavailableGW":"Default gateway unavailable",
+  "addressType":"Address type","localNoQuery":"Public GeoIP/WHOIS skipped","host":"Hostname","localIP":"Local outbound IP","interfaces":"Interfaces","gateways":"Default gateways","publicIP":"Public IP","publicDetail":"Public details","warnings":"Warnings","unavailableGW":"Default gateway unavailable","networkOverview":"Local network overview","hiddenInterfaces":"%d additional interfaces hidden (use -all)",
  },
 }
 func translate(lang,key string)string {
@@ -728,19 +728,62 @@ func inspectLocal(client *http.Client,timeout time.Duration,whoisOnly bool)Local
  report.Public=&r
  return report
 }
-func printLocal(r LocalReport,lang string,all,whoisOnly bool) {
- fmt.Printf("%s: %s\n",translate(lang,"host"),cleanDisplay(r.Hostname))
- fmt.Printf("%s: %s\n",translate(lang,"localIP"),cleanDisplay(r.LocalIP))
- fmt.Printf("%s:\n",translate(lang,"interfaces"))
+// Main network view intentionally hides macOS discovery interfaces and
+// virtual bridges unless -all is specified. JSON always includes everything.
+func primaryInterfaces(r LocalReport) []InterfaceInfo {
+ selected:=map[string]bool{}
+ for _,gw:=range r.Gateways {if gw.Interface!="" {selected[gw.Interface]=true}}
+ if r.LocalIP!="" {
+  for _,iface:=range r.Interfaces {
+   for _,address:=range iface.Addresses {
+    host,_,err:=net.ParseCIDR(address)
+    if err==nil && host.String()==r.LocalIP {selected[iface.Name]=true}
+   }
+  }
+ }
+ result:=[]InterfaceInfo{}
  for _,iface:=range r.Interfaces {
-  fmt.Printf("  %s: %s\n",iface.Name,strings.Join(iface.Addresses,", "))
+  if selected[iface.Name] {result=append(result,iface)}
  }
- fmt.Printf("%s:\n",translate(lang,"gateways"))
- if len(r.Gateways)==0 {fmt.Println("  "+translate(lang,"unavailableGW"))}
- for _,gw:=range r.Gateways {fmt.Printf("  %s: %s (%s)\n",gw.Family,gw.Gateway,gw.Interface)}
- fmt.Printf("%s: %s\n",translate(lang,"publicIP"),cleanDisplay(r.PublicIP))
+ return result
+}
+func formatLocal(r LocalReport,lang string,all,whoisOnly bool)string {
+ var b strings.Builder
+ fmt.Fprintf(&b,"NetKit  ·  %s\n",translate(lang,"networkOverview"))
+ fmt.Fprintf(&b,"────────────────────────────────────────\n")
+ fmt.Fprintf(&b,"  %-14s %s\n",translate(lang,"host"),cleanDisplay(r.Hostname))
+ fmt.Fprintf(&b,"  %-14s %s\n",translate(lang,"localIP"),cleanDisplay(r.LocalIP))
+ fmt.Fprintf(&b,"\n%s\n",translate(lang,"interfaces"))
+ interfaces:=primaryInterfaces(r)
+ if all {interfaces=r.Interfaces}
+ for _,iface:=range interfaces {
+  fmt.Fprintf(&b,"  %-12s %s\n",iface.Name,strings.Join(iface.Addresses,", "))
+ }
+ if len(interfaces)==0 {fmt.Fprintf(&b,"  %s\n",translate(lang,"unavailable"))}
+ if !all && len(r.Interfaces)>len(interfaces) {
+  fmt.Fprintf(&b,"  %s\n",fmt.Sprintf(translate(lang,"hiddenInterfaces"),len(r.Interfaces)-len(interfaces)))
+ }
+ fmt.Fprintf(&b,"\n%s\n",translate(lang,"gateways"))
+ if len(r.Gateways)==0 {fmt.Fprintf(&b,"  %s\n",translate(lang,"unavailableGW"))}
+ for _,gw:=range r.Gateways {
+  fmt.Fprintf(&b,"  %-6s %s",gw.Family,gw.Gateway)
+  if gw.Interface!="" {fmt.Fprintf(&b," (%s)",gw.Interface)}
+  b.WriteByte('\n')
+ }
+ fmt.Fprintf(&b,"\n%s\n",translate(lang,"publicDetail"))
+ fmt.Fprintf(&b,"  %-14s %s\n",translate(lang,"publicIP"),cleanDisplay(r.PublicIP))
  if r.Public!=nil {
-  if all {printResult(*r.Public,true,whoisOnly,lang)}else{printCompact(*r.Public,whoisOnly,lang)}
+  fmt.Fprintf(&b,"  %s\n",compactLine(*r.Public,whoisOnly,lang))
  }
+ if all && r.Public!=nil {
+  // The full WHOIS and API payloads are printed separately, after the
+  // readable network summary.
+  fmt.Fprintf(&b,"\n")
+ }
+ return b.String()
+}
+func printLocal(r LocalReport,lang string,all,whoisOnly bool) {
+ fmt.Print(formatLocal(r,lang,all,whoisOnly))
+ if all && r.Public!=nil {printResult(*r.Public,true,whoisOnly,lang)}
  for _,warning:=range r.Warnings {fmt.Fprintln(os.Stderr,translate(lang,"warnings")+": "+warning)}
 }
