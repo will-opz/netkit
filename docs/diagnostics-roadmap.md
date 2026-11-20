@@ -116,7 +116,8 @@ Tests above may legitimately return nonzero (for example, blocked or closed port
 - [x] O1 HTTP phases: local `httptrace` callbacks for DNS/connect/TLS/TTFB, nullable durations in JSON, explicit connection reuse, loopback HTTP/TLS tests, preserve redirect-hop totals.
 - [x] O2 TCP all-IPs: opt-in sequential per-address checks under overall timeout, explicit `partial_failure` and counters, retains default early success; offline local tests.
 - [x] O3 phase 1: explicit `netkit dns query` through Cloudflare/Google DoH, raw RCODE, per-record TTL, SOA/CAA/SRV and Answer/Authority, negative-answer and transport-error isolation.
-- [ ] O3 phase 2: extend or complement `dns compare` with DNS RCODE/TTL/CNAME comparison and clearly labeled evidence; evaluate native DNS wire support if needed.
+- [x] O3 phase 2: `dns compare -detail -type TYPE` adds public DoH RCODE, TTL and answer comparisons alongside the existing system DNS results; baseline comparison now includes CNAME; offline tests cover differing responses and failed providers.
+- [ ] Future: native DNS wire queries for authoritative paths and explicit OS RCODE/TTL (do not conflate resolver APIs with wire-level observations).
 - [ ] O4 TLS error classification.
 - [ ] O5 suffix/CDN improvements.
 
