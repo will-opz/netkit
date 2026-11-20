@@ -34,7 +34,7 @@ Use `make deploy` to build and install to `~/.local/bin/netkit` (creates the dir
 ./netkit                                      # 等同于 netkit ip，显示本机内外网、网关
 ./netkit ip                                   # 本机接口、内网地址、默认网关与公网信息
 ./netkit ip 192.168.1.1                       # 本地分类，不请求公网 GeoIP / WHOIS
-./netkit ip 8.8.8.8                           # 默认中文单行汇总
+./netkit ip 8.8.8.8                           # 默认中文单行汇总，标识已知公共 DNS
 ./netkit ip --output json 8.8.8.8            # 推荐的 JSON 输出方式
 ./netkit ip --output text 8.8.8.8            # 明确指定文本输出
 ./netkit ip -lang en 8.8.8.8                  # English output
@@ -55,6 +55,12 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## Known public DNS detection
+
+`netkit 8.8.8.8` and `netkit ip 1.1.1.1` now perform an **offline exact-address lookup** against the same catalog as `netkit dns list`, before querying GeoIP or WHOIS. Positive matches are labeled `公共 DNS: Google Public DNS` / `Public DNS: Cloudflare`, with `known_dns` metadata in JSON (`provider`, `role`, `match`, `doh`). The flag `-all` also shows the matched provider.
+
+Only the specific public resolver addresses in the catalog are recognized: the program does not infer DNS status from PTR records, ASN, hosting, or neighboring addresses. A missing match means **not in the built-in list**, not “not a DNS server.” This is static catalog identification, not an active DNS availability or service verification. Both IPv4 and IPv6 are supported; GeoIP/WHOIS behavior remains unchanged.
 
 ## Smart command routing and DNS / domain (V1)
 
