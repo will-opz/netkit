@@ -29,8 +29,10 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit dns --output json                   # 本机 DNS 配置 JSON
 ./netkit dns list                            # 常用公共 DNS 清单
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
-./netkit domain example.com                  # DNS 记录 + RDAP 注册商、注册/到期时间
-./netkit domain -no-rdap example.com         # 仅 DNS 记录，跳过 RDAP
+./netkit domain example.com                  # 主域名和 www 的 CDN/网站可用性 + 注册信息
+./netkit domain records example.com          # 详细 A/AAAA/MX/NS/TXT/CNAME 记录
+./netkit domain records --output json example.com  # DNS 记录 JSON
+./netkit domain -no-rdap example.com         # 网站/CDN 检查，跳过 RDAP
 ./netkit domain --output json example.com   # 域名查询 JSON
 ./netkit                                      # 等同于 netkit ip，显示本机内外网、网关
 ./netkit ip                                   # 本机接口、内网地址、默认网关与公网信息
@@ -68,7 +70,11 @@ Only the specific public resolver addresses in the catalog are recognized: the p
 - **Automatic routing:** `netkit <IPv4|IPv6>` is equivalent to `netkit ip <IP>`, while `netkit example.com` is equivalent to `netkit domain example.com`. Explicit `ip`, `dns`, `domain` subcommands take priority. Bare `netkit` still shows the local network overview. Domain auto-detection accepts ASCII/Punycode hostnames; URLs and Unicode IDNs are not accepted directly.
 - **System DNS:** `netkit dns` shows resolver addresses and metadata. On macOS it reads `scutil --dns` (including supplemental and scoped resolver entries), with a fallback to `/etc/resolv.conf`. On Linux it reads `/etc/resolv.conf`. Displayed settings are configuration evidence, not proof of the actual server used by every app or encrypted DNS client.
 - **Public DNS directory:** `netkit dns list` prints fixed reference addresses for Cloudflare, Google, Quad9 and AdGuard (IPv4/IPv6 and DoH URL). This is not a live availability, speed or security assessment.
-- **Domain records:** `netkit domain example.com` concurrently queries the system resolver for A, AAAA, CNAME, MX, NS and TXT, using a per-type timeout. By default, it also fetches IANA RDAP domain bootstrap and queries the registry for registrar, registration/expiry/update dates and status (with HTTP 404 fallback from subdomain to parent). Use `-no-rdap` to skip registration lookup; RDAP errors do not discard DNS records. JSON includes `registration` with missing values omitted. Registration expiry is the registry-published date and may differ from registrar billing/renewal information. Absent optional records (such as MX/TXT on a web hostname) are treated as empty; genuine DNS failures are reported independently under JSON `errors`. Output supports `--output json`, `-lang zh|en`. Options must precede the domain due to Go standard flag parsing.
+- **Default domain overview:** `netkit baidu.com` checks the apex and `www.baidu.com` only, reporting HTTPS reachability (with HTTP fallback when HTTPS fails), status code, latency, CDN indicators and RDAP registration details. `netkit www.baidu.com` or any explicitly supplied subdomain checks only that hostname. Apex inference uses a conservative, small common-suffix list, not a full Public Suffix List: for unusual public suffixes, specify each desired hostname explicitly.
+- **CDN identification:** based on a recognized CNAME suffix (stronger evidence) or combinations of characteristic HTTP headers (labeled a hint, not proof). Conflicting evidence is labeled as such; otherwise unknown remains unknown. CDN services can flatten CNAMEs or suppress headers, so false negatives are possible. No claim of DNSSEC or end-to-end browser health is made.
+- **Website health:** HTTP 2xx/3xx = successful HTTP response, 401/403 = access restricted, 404/5xx = HTTP error, network/TLS failure = unavailable unless HTTP fallback succeeds. Redirect destination, response code and errors are included in JSON. Each website check has bounded timeouts. A redirect to an unrelated host is rejected by the current probe policy.
+- **DNS record details:** `netkit domain records example.com` explicitly queries A, AAAA, CNAME, MX, NS and TXT through the system resolver; absent optional records are not treated as errors. Use `--output json` for structured data. These records are not fetched for the default website overview.
+- **RDAP registration:** default overview separately queries IANA domain bootstrap and registry RDAP for registrar, creation, expiration, update and status; HTTP 404 on a subdomain triggers a parent lookup. Use `-no-rdap` to skip registration. RDAP errors do not discard website checks. Registry expiry may differ from registrar billing/renewal details. Absent optional records (such as MX/TXT on a web hostname) are treated as empty; genuine DNS failures are reported independently under JSON `errors`. Output supports `--output json`, `-lang zh|en`. Options must precede the domain due to Go standard flag parsing.
 - Both modules use Go's standard library only. Native custom DNS-server selection, DNSSEC validation and detailed authoritative trace are future enhancements.
 
 ### IP 类型和本机网络检查
