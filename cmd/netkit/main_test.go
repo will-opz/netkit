@@ -3,6 +3,7 @@ package main
 import (
  "strings"
  "testing"
+ "reflect"
  "net"
  "net/http"
  "time"
@@ -104,4 +105,17 @@ func TestLinuxDefaultRouteParser(t *testing.T) {
 func TestRouteGetParser(t *testing.T) {
  r:=parseRouteGet("route to: default\ngateway: 192.168.0.254\ninterface: en0\n","IPv4")
  if r.Gateway!="192.168.0.254"||r.Interface!="en0" {t.Fatalf("unexpected route: %+v",r)}
+}
+
+func TestDefaultCommandArgs(t *testing.T) {
+ tests:=[]struct{in,want []string}{
+  {[]string{"netkit"},[]string{"netkit","ip"}},
+  {[]string{"netkit","ip"},[]string{"netkit","ip"}},
+  {[]string{"netkit","-h"},[]string{"netkit","-h"}},
+  {[]string{"netkit","dns"},[]string{"netkit","dns"}},
+ }
+ for _,tt:=range tests {
+  got:=defaultCommandArgs(append([]string(nil),tt.in...))
+  if !reflect.DeepEqual(got,tt.want) {t.Errorf("%v -> %v (want %v)",tt.in,got,tt.want)}
+ }
 }
