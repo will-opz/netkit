@@ -5,6 +5,7 @@ import (
  "errors"
  "net"
  "strconv"
+ "strings"
  "testing"
  "time"
 )
@@ -52,7 +53,7 @@ func TestTCPFallbackAcrossAddresses(t *testing.T){
  }
  ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
  defer cancel()
- r:=probeTCP(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver)
+ r:=probeTCPWithDial(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver,false,deterministicTCPDial)
  if r.Status!="connected"||len(r.Attempts)!=2||r.Attempts[0].Connected||!r.Attempts[1].Connected{
   t.Fatalf("expected retry on next address: %+v",r)
  }
@@ -112,7 +113,7 @@ func TestTCPAllIPsPartialFailure(t *testing.T){
  }
  ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
  defer cancel()
- r:=probeTCPMode(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver,true)
+ r:=probeTCPWithDial(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver,true,deterministicTCPDial)
  if r.Status!="partial_failure"||!r.AllIPs||r.SuccessCount!=1||r.FailureCount!=1||len(r.Attempts)!=2{
   t.Fatalf("expected both addresses and partial failure: %+v",r)
  }
@@ -143,8 +144,15 @@ func TestTCPDefaultStopsAfterFirstSuccess(t *testing.T){
  }
  ctx,cancel:=context.WithTimeout(context.Background(),2*time.Second)
  defer cancel()
- r:=probeTCP(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver)
+ r:=probeTCPWithDial(ctx,"test.example",ln.Addr().(*net.TCPAddr).Port,resolver,false,deterministicTCPDial)
  if r.Status!="connected"||len(r.Attempts)!=1||r.AllIPs{
   t.Fatalf("default quick probe behavior changed: %+v",r)
  }
+}
+
+func deterministicTCPDial(ctx context.Context,network,address string)(net.Conn,error){
+ if strings.HasPrefix(address,"127.0.0.2:"){
+  return nil,errors.New("simulated connection refused")
+ }
+ return (&net.Dialer{}).DialContext(ctx,network,address)
 }
