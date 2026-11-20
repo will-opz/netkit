@@ -3,6 +3,7 @@ package main
 import (
  "context"
  "encoding/json"
+ "errors"
  "flag"
  "fmt"
  "net"
@@ -43,6 +44,11 @@ func validDomain(raw string)bool {
  for _,r:=range tld{if r<'0'||r>'9'{numeric=false;break}}
  return !numeric
 }
+func isOptionalRecordMissing(kind string,err error)bool{
+ if kind=="A/AAAA" {return false}
+ var dnsErr *net.DNSError
+ return errors.As(err,&dnsErr)&&dnsErr.IsNotFound
+}
 func queryDomain(domain string,timeout time.Duration)DomainReport{
  report:=DomainReport{Domain:strings.TrimSuffix(strings.ToLower(domain),"."),Errors:map[string]string{}}
  resolver:=net.DefaultResolver
@@ -54,6 +60,7 @@ func queryDomain(domain string,timeout time.Duration)DomainReport{
    defer cancel()
    if err:=fn(ctx);err!=nil {
     // Errors map is shared; serialize writes by a mutex.
+    if isOptionalRecordMissing(kind,err) {return}
     domainErrorMu.Lock();report.Errors[kind]=err.Error();domainErrorMu.Unlock()
    }
   }()
