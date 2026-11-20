@@ -108,7 +108,7 @@ func main() {
   fmt.Println("NetKit：网络诊断工具箱")
   fmt.Println("Usage: netkit ip [options] [IPv4|IPv6 ...]")
   fmt.Println("子命令:\n  ip    多数据源 IP 信息与 WHOIS 查询")
-  fmt.Println("使用 netkit ip -h 查看参数；不指定 IP 时自动查询本机公网 IP。")
+  fmt.Println("使用 netkit ip -h 查看参数；不指定 IP 时查看本机网卡、网关和公网 IP。")
   return
  }
  if os.Args[1]!="ip" {
@@ -124,7 +124,7 @@ func main() {
  lang := flag.String("lang", "zh", "输出语言：zh（默认中文）、en（英文）")
  flag.Usage = func() {
   fmt.Fprintln(flag.CommandLine.Output(), "Usage: netkit ip [options] [IPv4|IPv6 ...]")
-  fmt.Fprintln(flag.CommandLine.Output(), "不指定 IP 时通过多个 HTTPS 接口检测当前公网 IP。")
+  fmt.Fprintln(flag.CommandLine.Output(), "不指定 IP 时显示本机接口、默认网关并检测公网 IP。")
   flag.PrintDefaults()
  }
  flag.Parse()
@@ -711,7 +711,8 @@ func inspectLocal(client *http.Client,timeout time.Duration,whoisOnly bool)Local
   for _,addr:=range addrs {item.Addresses=append(item.Addresses,addr.String())}
   if len(item.Addresses)>0 {report.Interfaces=append(report.Interfaces,item)}
  }
- gateways,errNotes:=defaultGateways()\n report.Gateways=gateways
+ gateways,errNotes:=defaultGateways()
+ report.Gateways=gateways
  report.Warnings=append(report.Warnings,errNotes...)
  public,err:=publicIP(client,timeout)
  if err!=nil {report.Warnings=append(report.Warnings,"public IP: "+err.Error());return report}
@@ -720,8 +721,6 @@ func inspectLocal(client *http.Client,timeout time.Duration,whoisOnly bool)Local
  report.Public=&r
  return report
 }
-// Keep gateway diagnostics isolated from interface enumeration.
-func localGatewayWrapper()([]GatewayInfo,[]string){return defaultGateways()}
 func printLocal(r LocalReport,lang string,all,whoisOnly bool) {
  fmt.Printf("%s: %s\n",translate(lang,"host"),cleanDisplay(r.Hostname))
  fmt.Printf("%s: %s\n",translate(lang,"localIP"),cleanDisplay(r.LocalIP))
