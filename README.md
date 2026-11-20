@@ -2,6 +2,14 @@
 
 Zero-external-dependency Go network diagnostics CLI. V1 provides multi-source IP geolocation and WHOIS registration lookup with fault isolation.
 
+## Release preparation (not yet published)
+
+`netkit version`, `netkit --version` and `netkit version --output=json` display build-time version and source commit metadata. A local development binary is labeled `dev` by default. An official version is only stamped when release packages are built from a reviewed version tag.
+
+A release packaging workflow is now available at `.github/workflows/release.yml`. A **manual workflow dispatch** generates verified archives as a dry run; pushing an approved `vMAJOR.MINOR.PATCH` tag triggers tests, cross-platform packaging, SHA256 verification and creation of a GitHub Release for that pre-existing tag. No tag or GitHub Release has been created by these preparation commits, and the workflow does **not** modify the Homebrew Tap. See [release playbook](docs/releasing.md) and [changelog](CHANGELOG.md).
+
+**License decision pending:** the repository's own code needs a top-level source license selected by the maintainer before the first public binary release. The vendored Public Suffix List retains its separate MPL-2.0 notice; that is not a license for the NetKit application itself.
+
 ## Install and update
 
 Requires Go 1.23+ and Make. Clone once, then run `make` whenever you want to update the checkout and rebuild the binary:
@@ -22,6 +30,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 
 ```sh
 ./netkit --help                              # 总帮助：子命令、选项、示例
+./netkit version                             # 开发版 dev / 正式版 vX.Y.Z 和提交信息
+./netkit --version                           # 标准版本查询别名
 ./netkit --output json                      # 本机网络概览 JSON
 ./netkit 192.168.1.1                         # 自动识别 IP，等同 netkit ip 192.168.1.1
 ./netkit www.baidu.com                       # 自动识别域名，等同 netkit domain www.baidu.com
