@@ -53,6 +53,7 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit tcp example.com 443                 # DNS + TCP 连接诊断
 ./netkit diagnose example.com                # 统一 DNS/TCP/TLS/HTTP 本地证据
 ./netkit diagnose --output json https://example.com # AI-ready 结构化证据
+./netkit diagnose -ai example.com            # 可选 AI 综合解释（需配置模型 API）
 ./netkit tcp -all-ips example.com 443        # 逐个检测所有 A/AAAA 地址
 ./netkit tcp --output json 127.0.0.1 5432    # 本地服务 TCP JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
@@ -85,6 +86,35 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## Optional AI analysis (A1 OpenAI-compatible API)
+
+`netkit diagnose -ai example.com` runs the same deterministic DNS/TCP/TLS/HTTP checks and **then** optionally sends a curated evidence projection to an OpenAI-compatible `/v1/chat/completions` API for a Chinese summary and evidence-backed recommendations. Ordinary `netkit diagnose` never contacts an AI provider. OpenAI, local Ollama/Qwen and a compatible API gateway share the **same client**.
+
+No API Key is stored in this repository. Configure locally in your terminal or secret manager; do not commit secrets or paste real keys into public issue threads:
+
+```sh
+# OpenAI API (default base URL; choose a model enabled on your account)
+export NETKIT_AI_BASE_URL=https://api.openai.com/v1
+export NETKIT_AI_MODEL='<your-model-id>'
+export NETKIT_AI_API_KEY='<your-key>'
+./netkit diagnose -ai example.com
+
+# Ollama / Qwen locally (no external key required)
+export NETKIT_AI_BASE_URL=http://127.0.0.1:11434/v1
+export NETKIT_AI_MODEL=qwen3:8b
+unset NETKIT_AI_API_KEY
+./netkit diagnose -ai example.com
+
+# JSON for machine processing
+./netkit diagnose -ai --output json example.com
+```
+
+Other OpenAI-compatible providers and NewAPI gateways are selected only by changing `NETKIT_AI_BASE_URL`, `NETKIT_AI_MODEL` and `NETKIT_AI_API_KEY`. Optionally set `NETKIT_AI_TIMEOUT` (default `30s`, maximum `120s`). Remote endpoints must use HTTPS; plain HTTP is allowed only for local loopback inference. Redirects from AI services are refused. The API is optional and uses only Go standard-library HTTP/JSON facilities. Server compatibility and supported model IDs must be confirmed against the actual provider.
+
+**Privacy gate:** raw network errors, response headers, URLs/queries, DNS TXT, token-bearing fields and certificate subjects are omitted from the AI payload. The target hostname and summarized stage statuses are included, so using an external model still reveals the destination. For private/internal targets or private resolved IPs, remote AI analysis requires an explicit `-ai-allow-private` flag. Loopback local AI servers do not require that remote-data approval. Never pass confidential infrastructure to an untrusted provider.
+
+The model must return JSON with `summary`, `evidence_ids`, `hypotheses` and `next_checks`. NetKit validates field bounds, recognized confidence values, and whether referenced evidence IDs exist. It does not trust model-generated network measurements or allow shell execution. The optional `ai_analysis` is kept separate from deterministic evidence. On timeout, missing key, malformed JSON or invalid citations, only `ai_error` is added; the original diagnostic status and exit behavior remain unchanged.
 
 ## Deterministic comprehensive diagnosis (A0)
 
