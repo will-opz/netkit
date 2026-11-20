@@ -74,3 +74,38 @@ func TestWebsiteProbeFailure(t *testing.T){
  got:=probeWebsite(context.Background(),client,"example.com")
  if got.Reachable||got.Error=="" {t.Fatalf("unexpected success: %+v",got)}
 }
+
+func TestCDNEvidenceRedirectHostSeparation(t *testing.T){
+ result:=WebsiteCheck{
+  Host:"example.com",
+  FinalURL:"https://www.example.com/",
+  responseHeaders:http.Header{"Server":[]string{"cloudflare"},"Cf-Ray":[]string{"abc"}},
+ }
+ applyWebsiteCDNEvidence(&result,"example.com","d123.cloudfront.net")
+ if result.CDN.Provider!="Cloudflare"||result.CDN.Confidence!="headers"{
+  t.Fatalf("final HTTP host CDN lost: %+v",result.CDN)
+ }
+ if result.DNSCDN==nil||result.DNSCDN.Provider!="Amazon CloudFront"{
+  t.Fatalf("requested-host DNS CNAME evidence lost: %+v",result)
+ }
+ if result.CDN.Confidence=="conflict"{t.Fatal("redirected-host evidence must not be a conflict")}
+}
+func TestCDNEvidenceSameHostConflict(t *testing.T){
+ result:=WebsiteCheck{
+  Host:"example.com",
+  FinalURL:"https://example.com/",
+  responseHeaders:http.Header{"Server":[]string{"cloudflare"},"Cf-Ray":[]string{"abc"}},
+ }
+ applyWebsiteCDNEvidence(&result,"example.com","d123.cloudfront.net")
+ if result.CDN.Confidence!="conflict"||result.CDN.Provider!=""{
+  t.Fatalf("same-host conflicting CDN signals: %+v",result.CDN)
+ }
+ if result.DNSCDN!=nil{t.Fatalf("same-host CNAME should be merged: %+v",result)}
+}
+func TestCDNEvidenceAbsentDoesNotProveNoCDN(t *testing.T){
+ result:=WebsiteCheck{Host:"example.com"}
+ applyWebsiteCDNEvidence(&result,"example.com","")
+ if result.CDN.Confidence!="unknown"||result.CDN.Provider!=""{
+  t.Fatalf("absence of signals cannot prove no CDN: %+v",result)
+ }
+}
