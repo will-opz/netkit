@@ -21,20 +21,23 @@ Use `make deploy` to build and install to `~/.local/bin/netkit` (creates the dir
 ## Usage
 
 ```sh
-./netkit --help
+./netkit --help                              # 总帮助：子命令、选项、示例
+./netkit --output json                      # 本机网络概览 JSON
 ./netkit                                      # 等同于 netkit ip，显示本机内外网、网关
 ./netkit ip                                   # 本机接口、内网地址、默认网关与公网信息
 ./netkit ip 192.168.1.1                       # 本地分类，不请求公网 GeoIP / WHOIS
 ./netkit ip 8.8.8.8                           # 默认中文单行汇总
+./netkit ip --output json 8.8.8.8            # 推荐的 JSON 输出方式
+./netkit ip --output text 8.8.8.8            # 明确指定文本输出
 ./netkit ip -lang en 8.8.8.8                  # English output
 ./netkit ip 8.8.8.8 1.1.1.1                   # one line per IP
 ./netkit ip -all 8.8.8.8                      # full WHOIS and per-provider JSON
 ./netkit ip -whois 8.8.8.8                    # TCP 43 only
-./netkit ip -json 8.8.8.8                     # machine-readable output
+./netkit ip -json 8.8.8.8                     # 旧版 JSON 参数，仍然兼容
 ./netkit ip -timeout 8s 2001:4860:4860::8888
 ```
 
-Note: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+`--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
 
 ### IP 类型和本机网络检查
 
