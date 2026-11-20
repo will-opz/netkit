@@ -146,7 +146,8 @@ func inspectTLS(host string,port int,timeout time.Duration)(report TLSReport){
 
 func validTLSTarget(host string)bool{
  if host==""||strings.ContainsAny(host,"/@\\ \t\n"){return false}
- if net.ParseIP(host)!=nil {return true}
+ if net.ParseIP(host)!=nil{return true}
+ if strings.EqualFold(host,"localhost"){return true}
  return validDomain(host)
 }
 func tlsHelp(){
