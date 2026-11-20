@@ -32,6 +32,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit dns compare --output json baidu.com # DNS 对比 JSON
 ./netkit tls example.com                     # TLS 握手、证书信任链、颁发者与到期时间
 ./netkit tls -port 8443 --output json example.com # 自定义端口和 JSON
+./netkit http example.com                    # HTTP 状态和跳转链
+./netkit http --output json https://example.com/path # HTTP 逐跳 JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
 ./netkit domain example.com                  # 主域名和 www 的 CDN/网站可用性 + 注册信息
 ./netkit domain records example.com          # 详细 A/AAAA/MX/NS/TXT/CNAME 记录
@@ -62,6 +64,10 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## HTTP redirect diagnostics (P0.2)
+
+`netkit http example.com` makes a local HTTPS request and traces up to five redirects (configurable with `-max-redirects 0..20`). Explicit `http://` or `https://` URLs and paths are preserved. Each HTTP hop records its status, latency and `Location` header; the final URL, redirect count and HTTPS-to-HTTP downgrades are reported. Loop, redirect limit, unsupported redirect scheme and connection failures are distinct. HTTP 401/403/407/429 classify as restricted, 4xx/5xx as HTTP errors. Status success means a 2xx final response; the command returns a nonzero exit code for other outcomes. It intentionally does not automatically inspect `www` or silently try HTTP after an HTTPS error. Use `--output json`, `-lang en`, `-timeout 5s`, `-max-redirects 5`. This is a **local probe** and intentionally permits private/local endpoints; do not expose it as an unrestricted remote API.
 
 ## TLS certificate diagnostics (P0.1)
 
