@@ -49,3 +49,23 @@ func TestCompactFormattingSourceCount(t *testing.T) {
  // Ensure all compact dependencies are represented without a network request.
  if r.Summary.Country!="JP" || len(r.Sources)!=2 || r.Sources[1].Error=="" {t.Fatal("fixture invalid")}
 }
+
+func TestLocalization(t *testing.T) {
+ if got:=countryName("zh","US");got!="美国" {t.Fatalf("zh US = %s",got)}
+ if got:=countryName("en","US");got!="US" {t.Fatalf("en US = %s",got)}
+ if got:=countryName("zh","ZZ");got!="ZZ" {t.Fatalf("unknown country must remain unchanged: %s",got)}
+ if translate("zh","region")!="地区"||translate("en","region")!="Region" {t.Fatal("region translation")}
+}
+func TestCompactLineLanguages(t *testing.T) {
+ hosting:=true
+ r:=Result{IP:"8.8.8.8",Summary:Summary{
+  Country:"US",ASN:"AS15169",Organization:"Google LLC",Hosting:&hosting,
+  Agreements:map[string]Agreement{"region":{Value:"California",Agree:2,Reported:3,Alternatives:map[string][]string{"Virginia":{"ipinfo.io"}}}},
+ },Sources:[]Source{{Name:"ip-api.com"},{Name:"ipwho.is"},{Name:"ipinfo.io",Error:"HTTP 429"},{Name:"api.ip.sb"}},
+ Whois:Registry{Servers:[]string{"whois.iana.org","whois.arin.net"},CIDR:"8.8.8.0/24"}}
+ zh:=compactLine(r,false,"zh")
+ en:=compactLine(r,false,"en")
+ if !strings.Contains(zh,"美国")||!strings.Contains(zh,"机房: 是")||!strings.Contains(zh,"数据源: 3/4")||!strings.Contains(zh,"GeoIP 差异: 地区") {t.Errorf("zh: %s",zh)}
+ if !strings.Contains(en,"US")||!strings.Contains(en,"Hosting: Yes")||!strings.Contains(en,"Sources: 3/4")||!strings.Contains(en,"GeoIP mismatch: Region") {t.Errorf("en: %s",en)}
+ if strings.Contains(zh,"Difference/issue") {t.Errorf("old warning label: %s",zh)}
+}
