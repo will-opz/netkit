@@ -16,7 +16,9 @@ go build -o netkit ./cmd/netkit
 
 ```sh
 ./netkit --help
-./netkit ip                                   # 本机接口、内网地址、默认网关与公网信息\n./netkit ip 192.168.1.1                       # 本地分类，不请求公网 GeoIP / WHOIS
+./netkit                                      # 等同于 netkit ip，显示本机内外网、网关
+./netkit ip                                   # 本机接口、内网地址、默认网关与公网信息
+./netkit ip 192.168.1.1                       # 本地分类，不请求公网 GeoIP / WHOIS
 ./netkit ip 8.8.8.8                           # 默认中文单行汇总
 ./netkit ip -lang en 8.8.8.8                  # English output
 ./netkit ip 8.8.8.8 1.1.1.1                   # one line per IP
@@ -28,7 +30,17 @@ go build -o netkit ./cmd/netkit
 
 Note: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
 
-### IP 类型和本机网络检查\n\n指定内网、回环、链路本地、CGNAT、文档保留等非公网地址时，只做本地地址分类并跳过 GeoIP/WHOIS。\n\n不带 IP 的 `netkit ip` 显示本机主机名、活动接口 IPv4/IPv6 地址与掩码、首选出口地址、默认 IPv4/IPv6 网关，以及通过多个 HTTPS 服务发现的公网 IP 和综合查询结果。公网查询失败不会阻止本地信息显示。\n\n网关检测：Linux 读取 `/proc/net/route` 与 `/proc/net/ipv6_route`；macOS 使用系统内置的 `route -n get` 命令（无需第三方软件）；其他平台标记为不可用，不猜测路由器地址。VPN/多路由环境中仅展示操作系统路由表确定的默认路由；无默认路由时显示不可用。\n\n不带地址时 `-json` 输出含 `interfaces`、`gateways`、`public_ip`、`public` 的对象；指定 IP 时保持此前的结果数组结构。`-all` 展开公网信息的各数据源详情。\n\n### Compact output
+### IP 类型和本机网络检查
+
+指定内网、回环、链路本地、CGNAT、文档保留等非公网地址时，只做本地地址分类并跳过 GeoIP/WHOIS。
+
+直接执行 `netkit`（等同于 `netkit ip`）显示本机主机名、活动接口 IPv4/IPv6 地址与掩码、首选出口地址、默认 IPv4/IPv6 网关，以及通过多个 HTTPS 服务发现的公网 IP 和综合查询结果。公网查询失败不会阻止本地信息显示。
+
+网关检测：Linux 读取 `/proc/net/route` 与 `/proc/net/ipv6_route`；macOS 使用系统内置的 `route -n get` 命令（无需第三方软件）；其他平台标记为不可用，不猜测路由器地址。VPN/多路由环境中仅展示操作系统路由表确定的默认路由；无默认路由时显示不可用。
+
+不带地址时 `-json` 输出含 `interfaces`、`gateways`、`public_ip`、`public` 的对象；指定 IP 时保持此前的结果数组结构。`-all` 展开公网信息的各数据源详情。
+
+### Compact output
 
 By default, each IP produces **exactly one line**, suitable for terminals and batch scripts. Example of the format (illustrative, not live results):
 
