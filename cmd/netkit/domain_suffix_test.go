@@ -54,3 +54,25 @@ func TestEmbeddedPSLHasLicensingAndPrivateDomains(t *testing.T){
   t.Fatal("missing PSL license or private section")
  }
 }
+
+func TestUnicodeSuffixRulesForPunycodeDomains(t *testing.T){
+ cases:=[]struct{unicode,ascii string}{
+  {"公司.cn","xn--55qx5d.cn"},
+  {"网络.cn","xn--io0a7i.cn"},
+  {"bücher","xn--bcher-kva"},
+ }
+ for _,tc:=range cases{
+  if got:=encodeSuffixASCII(tc.unicode);got!=tc.ascii{
+   t.Errorf("punycode %s -> %s, want %s",tc.unicode,got,tc.ascii)
+  }
+ }
+ // A third-level domain directly under the Unicode PSL rule is an apex.
+ domain:="example.xn--55qx5d.cn"
+ if got:=registeredDomain(domain);got!=domain{
+  t.Fatalf("Unicode suffix did not match Punycode hostname: %s",got)
+ }
+ want:=[]string{domain,"www."+domain}
+ if got:=domainTargets(domain);!reflect.DeepEqual(got,want){
+  t.Fatalf("Unicode PSL apex targets: %v",got)
+ }
+}
