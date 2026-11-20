@@ -313,6 +313,7 @@ func registryServer(raw string)string {
  if strings.Contains(raw,"://") {
   u,err:=url.Parse(raw)
   if err!=nil||(u.Scheme!="whois"&&u.Scheme!="rwhois"){return ""}
+  if port:=u.Port();port!=""&&port!="43" {return ""}
   raw=u.Hostname()
  }
  raw=strings.ToLower(strings.TrimSuffix(raw,"."))
