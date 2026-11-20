@@ -45,6 +45,7 @@ func systemTCPResolve(ctx context.Context,name string)([]net.IPAddr,error){
 func validTCPHost(host string)bool{
  if host==""||strings.TrimSpace(host)!=host||strings.ContainsAny(host,"/@\\ \t\r\n"){return false}
  if net.ParseIP(host)!=nil{return true}
+ if strings.EqualFold(host,"localhost"){return true}
  return validDomain(host)
 }
 func probeTCP(ctx context.Context,host string,port int,resolve TCPResolver)(report TCPReport){
