@@ -3,8 +3,9 @@ SHELL := /bin/sh
 
 BINARY := netkit
 PACKAGE := ./cmd/netkit
+INSTALL_DIR ?= $(HOME)/.local/bin
 
-.PHONY: all update build test vet check fmt clean help
+.PHONY: all update build deploy test vet check fmt clean help
 
 # "make" updates this checkout safely, then builds the executable.
 all: update build
@@ -16,6 +17,13 @@ update:
 build:
 	@go build -o $(BINARY) $(PACKAGE)
 	@echo "Built ./$(BINARY)"
+
+
+# Build locally and install to the user's personal bin directory; no sudo.
+deploy: build
+	@mkdir -p "$(INSTALL_DIR)"
+	@install -m 755 "$(BINARY)" "$(INSTALL_DIR)/$(BINARY)"
+	@echo "Installed $(INSTALL_DIR)/$(BINARY)"
 
 test:
 	@go test ./...
@@ -34,6 +42,7 @@ clean:
 help:
 	@printf 'make          update (fast-forward only) and build\n'
 	@printf 'make build    compile without pulling\n'
+	@printf 'make deploy   build and install to ~/.local/bin/netkit\n'
 	@printf 'make update   git pull --ff-only\n'
 	@printf 'make check    go test and go vet\n'
 	@printf 'make fmt      gofmt Go source files\n'
