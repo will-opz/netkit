@@ -180,6 +180,10 @@ func printRootHelp() {
 }
 func main() {
  os.Args=defaultCommandArgs(os.Args)
+ if len(os.Args)>1&&(os.Args[1]=="--version"||os.Args[1]=="-version"){
+  if err:=runVersion(os.Args[2:]);err!=nil{fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  return
+ }
  if len(os.Args)<2 || os.Args[1]=="-h" || os.Args[1]=="--help" || os.Args[1]=="help" {
   printRootHelp()
   return
