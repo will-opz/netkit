@@ -5,7 +5,6 @@ import (
  "errors"
  "net"
  "strconv"
- "strings"
  "testing"
  "time"
 )
@@ -97,5 +96,9 @@ func TestTCPIPv6Local(t *testing.T){
  }
 }
 func TestTCPTargetInvalidPort(t *testing.T){
- if !strings.Contains("PORT must be a valid TCP port (1-65535)","PORT"){t.Fatal("bad error contract")}
+ for _,port:=range []string{"0","65536","http","-1","abc"} {
+  if err:=runTCP([]string{"example.com",port});err==nil {
+   t.Fatalf("accepted invalid TCP port %q",port)
+  }
+ }
 }
