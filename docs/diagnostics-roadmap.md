@@ -207,3 +207,16 @@ Use `netkit diagnose --output json example.com` to inspect the evidence contract
 - [ ] Real API integration requires a locally configured authorized API key and explicit acceptance testing; evaluate responses for different model families before declaring production-ready.
 
 The Homebrew Tap remains unchanged until a separately approved, verified tagged release.
+
+
+### Keychain and local config implementation (2026-11-20)
+
+- [x] `netkit config init`: create `~/.config/netkit/config.json` as mode 0600 (non-sensitive settings only, no overwrite); reject config symlink, plaintext `api_key`/`password` and unknown fields.
+- [x] `netkit config show`: inspect resolved non-secret config metadata without revealing credentials.
+- [x] macOS Keychain: `netkit config ai-key set|status|delete`, service/account configured in JSON; use `/usr/bin/security` to prompt interactively with `-w` as the final option, not a secret-bearing argv argument. Keychain errors sanitized.
+- [x] `netkit diagnose -ai`: merge config with explicit `NETKIT_AI_*` environment overrides, prefer env API Key if present; read Keychain only for remote AI requiring a key; skip Keychain for loopback local Ollama.
+- [x] Non-macOS/CI keeps env-only fallback with portable build tags and deterministic fake-Keychain tests. Cross-platform CI smoke-tests config creation, not real credential mutation.
+- [ ] Real interactive macOS Keychain end-to-end confirmation on the user's machine, followed by explicit real-model OpenAI test once API Key is locally supplied; **never paste the key into chat, logs, or GitHub**.
+- [ ] Future: evaluate native Security.framework integration and application-specific Keychain ACL if stronger per-binary isolation is needed; the `security` CLI is the actual access-control identity in the current version.
+
+No tagged release or Homebrew Tap update is permitted for this development milestone.
