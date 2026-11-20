@@ -6,7 +6,6 @@ import (
  "flag"
  "fmt"
  "net"
- "os"
  "strings"
  "sync"
  "time"
