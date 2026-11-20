@@ -107,21 +107,26 @@ func systemDNS()DNSConfig{
  return info
 }
 func dnsHelp() {
- fmt.Println("用法: netkit dns [list] [--output text|json] [-lang zh|en]")
+ fmt.Println("用法: netkit dns [list|compare] [--output text|json] [-lang zh|en]")
  fmt.Println("  netkit dns           本机 DNS 配置")
  fmt.Println("  netkit dns list      常见公共 DNS（静态目录，非实时测速）")
+ fmt.Println("  netkit dns compare baidu.com  比较系统、Cloudflare、Google 解析结果")
 }
 func runDNS(args []string)error{
  if len(args)>0&&(args[0]=="-h"||args[0]=="--help"||args[0]=="help"){dnsHelp();return nil}
  listing:=false
+ comparing:=false
  if len(args)>0&&args[0]=="list" {listing=true;args=args[1:]}
+ if len(args)>0&&args[0]=="compare" {comparing=true;args=args[1:]}
  fs:=flag.NewFlagSet("dns",flag.ContinueOnError)
  output:=fs.String("output","text","text/json")
  lang:=fs.String("lang","zh","zh/en")
+ timeout:=fs.Duration("timeout",5*time.Second,"query timeout")
  if err:=fs.Parse(args);err!=nil{return err}
- if fs.NArg()!=0{return fmt.Errorf("dns: unexpected argument %q",fs.Arg(0))}
+ if comparing {if fs.NArg()!=1{return fmt.Errorf("dns compare requires one domain")}} else if fs.NArg()!=0{return fmt.Errorf("dns: unexpected argument %q",fs.Arg(0))}
  format,err:=resolveOutputFormat(*output,false);if err!=nil{return err}
  if *lang!="zh"&&*lang!="en"{return errors.New("lang must be zh or en")}
+ if comparing{return runDNSCompare(fs.Arg(0),*timeout,format,*lang)}
  if listing{
   if format=="json"{b,_:=json.MarshalIndent(publicDNS,"","  ");fmt.Println(string(b));return nil}
   fmt.Println("公共 DNS / Public DNS (static reference)")
