@@ -24,8 +24,8 @@ build:
 deploy:
 	@command -v brew >/dev/null 2>&1 || { echo "Homebrew is required: https://brew.sh"; exit 1; }
 	@brew update
-	@if brew list --versions "$(BREW_FORMULA)" >/dev/null 2>&1 && [ -n "$(brew list --versions "$(BREW_FORMULA)")" ]; then \
-	  brew upgrade "$(BREW_FORMULA)" || { echo "Upgrade failed (possibly already current)."; exit 1; }; \
+	@if brew list --versions "$(BREW_FORMULA)" | grep -q .; then \
+	  brew upgrade "$(BREW_FORMULA)"; \
 	else \
 	  brew install "$(BREW_FORMULA)"; \
 	fi
