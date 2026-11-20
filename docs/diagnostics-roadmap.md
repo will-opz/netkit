@@ -144,3 +144,44 @@ No Homebrew Tap change: only an official tagged GitHub Release will trigger the 
 - [ ] Confirm first-release license (top-level `LICENSE` currently absent); first official Tag, GitHub Release, binary download audit and Homebrew update require explicit separate action.
 
 Release instructions: [docs/releasing.md](releasing.md). Changelog: [CHANGELOG.md](../CHANGELOG.md).
+
+
+## Planned diagnose and optional AI integration (2026-11-20 design decision)
+
+**Status: design approved for roadmap; not implemented.** Preserve the zero-third-party-Go-dependency CLI and all existing deterministic commands. AI is **opt-in**, never a prerequisite for ordinary CLI commands or diagnostic measurements. Both local Qwen/Ollama/llama.cpp and commercial API/NewAPI use a **single OpenAI-compatible Chat Completions client**. Select provider through base URL, model and API-key environment variable, not provider-specific business logic. Compatibility varies: validate supported structured-output behavior per backend, with application-level schema and evidence-ID validation even when the model offers JSON mode.
+
+### Delivery sequence
+
+| Phase | Priority | Scope | Acceptance / boundaries |
+| --- | --- | --- | --- |
+| A0 / P0 | First | CLI ergonomics, deterministic `netkit diagnose TARGET`, unified `DiagnosticPlan` and `EvidenceBundle` | Existing `netkit <domain>` quick behavior stays unchanged; fixed default DNS → TCP → TLS → HTTP steps; stable observation point, target, timestamps, per-stage status/error, evidence IDs, overall timeout and JSON; determine the first confirmed failing layer without arbitrary health score; operate fully offline from AI |
+| A1 / P1 | Second | Optional AI summary over completed `EvidenceBundle` | `netkit diagnose TARGET --ai` opt-in; single configurable API client for local Ollama/Qwen or HTTPS commercial API; response `ai_analysis` must cite valid evidence IDs, distinguish facts/hypotheses and recommend next checks; no original measurement may be changed; gracefully fall back on AI timeout, unavailable model or invalid JSON |
+| A2 / P1–P2 | After A1 | Focused AI explanations for DNS, TLS, HTTP and CDN | Only call AI when explicitly requested, preferably after deterministic explanations; do not reclassify NXDOMAIN/RCODE, certificate verification or HTTP response codes using model output |
+| A3 / P2 | Later | `netkit ask "natural language request"` to produce a `DiagnosticPlan` | Shared AI API client but a separate planner prompt/schema; preview and validate target, ports, tool whitelist, timeouts, request limits and scope; ask for missing host/port rather than guessing; never execute model-written shell strings |
+| A4 / P2–P3 | Later | Compare reports across separate runs | Compare real stored evidence and timestamps, report differences without inventing history or outages |
+| A5 / P3 | Optional | Suggested/approved further probes | No unbounded autonomous scanning; explicit user approval and restrictive command/target allowlist before any additional probe; no `sh -c` or arbitrary command execution |
+
+### CLI input strategy and examples (proposed, NOT available yet)
+
+1. **Deterministic CLI parser** remains the primary path. Parsing IPs, port numbers, `-timeout`, `--output`, scope validation and clear error messages must not invoke AI. Preserve existing shortcuts and exit/JSON compatibility.
+2. **Simple default diagnosis** should cover common user intent without extra flags: `netkit diagnose example.com`. Put advanced checks behind explicit options, not implicit model choices. Consider allowing flags before or after positional targets, and shell completion, using ordinary deterministic parsing rather than an LLM.
+3. **Natural-language entrypoint** is distinct and later: `netkit ask "检查 example.com 为什么访问慢"`. AI generates *data*, not a shell command; convert the output to a typed and validated `DiagnosticPlan` and show a preview before executing anything.
+4. **Opt-in explanation** can be requested independently: `netkit diagnose example.com --ai`; keep no-AI output complete and useful.
+
+### Uniform AI transport and configuration
+
+- Target lowest common compatible HTTP endpoint `/v1/chat/completions` with Go `net/http`; define one model-independent request/response abstraction. Base URL examples: `http://127.0.0.1:11434/v1` for Ollama and `https://api.openai.com/v1` for commercial services. Other Qwen-compatible services or NewAPI use the same client via configuration.
+- Proposed configuration keys: `NETKIT_AI_BASE_URL`, `NETKIT_AI_MODEL`, `NETKIT_AI_API_KEY` (never log or persist secrets), `NETKIT_AI_TIMEOUT`. Allow HTTP by default only for loopback-local inference; require HTTPS for remote endpoints and avoid unexpected redirects to unsafe endpoints.
+- Model behavior differences (JSON-schema enforcement, streaming, reasoning/thinking fields, tool calls) must be capability-checked; start with non-streaming, bounded Chat Completions requests and strict locally validated output.
+- Default AI **disabled**. AI failures should preserve the deterministic report and record optional `ai_error`; do not convert a successful network diagnosis into a general CLI failure merely because an AI API is unavailable.
+- Scope and privacy: minimize and redact sensitive URLs/query parameters, authorization and cookie headers, tokens, internal IPs and hostnames before any external API call; sending private topology requires an explicit opt-in. Treat DNS TXT, HTTP headers/bodies and model-generated text as untrusted content, not tool instructions.
+- Establish a small labeled regression corpus (at least 20–30 cases: DNS NXDOMAIN/SERVFAIL/disagreements, TCP partial failure, TLS mismatch/expiration, HTTP 403/429/redirect/timeout, CDN ambiguity) to assess attribution, valid evidence citations, hallucinations, latency and graceful fallback across local and cloud models.
+
+### AI's permitted role by diagnostic layer
+
+- **No AI** for raw DNS/TCP/TLS/HTTP measurements, validation, default statuses or security-sensitive command parsing.
+- **P0 AI value**: explain correlated multi-layer results and prioritize evidence-backed next steps *after* A0 is working.
+- **P1 specialty**: DNS resolver differences and DNSSEC uncertainty; TLS SAN/SNI, expiry and chain guidance; HTTP TTFB/redirect/restriction; CDN CNAME-vs-header evidence. Missing signals remain unknown, and no single probe proves global availability.
+- **Optional later**: explain IP/WHOIS/ASN provenance and changes between timestamped runs; deterministic explanations should be used for common errors where sufficient.
+
+**Release invariant:** development of any of the above must not create a formal version Tag or mutate `will-opz/homebrew-tap`. Only explicitly tagged, verified GitHub Releases can precede a separate Homebrew update.
