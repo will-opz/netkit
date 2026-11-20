@@ -34,7 +34,7 @@ Not in scope by default: password management, JSON/YAML/SQL formatting, QR, brow
 
 ## Domain correctness and safety
 
-- Current domain apex detection uses a small manually maintained suffix list. Evaluate a Public Suffix List strategy before broadening assumptions; explicit subdomains must remain single-host checks.
+- Domain apex detection uses a pinned, embedded Mozilla Public Suffix List (ICANN + PRIVATE) under MPL-2.0, including wildcard/exception and Unicode/Punycode rules; review upstream snapshots intentionally before updating. Explicit subdomains remain single-host checks.
 - Keep bounded timeouts, independent provider failure handling and no infinite redirects.
 - A CLI may test localhost/private IPs intentionally; a remote public API must apply stricter SSRF rules. Do not blindly copy server-only input restrictions to local diagnostics.
 - TLS verification and certificate collection must be separate outcomes; a failed handshake and a chain validation failure are not equivalent.
@@ -71,7 +71,7 @@ Peer tools reviewed for product direction: `dig`, `doggo`, `dnsx` (DNS and bulk)
 | O2 / highest (implemented) | TCP `-all-ips` opt-in | Default still stops after first successful resolved address | Default behavior unchanged; explicit flag checks each resolved A/AAAA address, bounded overall timeout, stable address order, per-IP status and failure evidence; IPv4/IPv6 local tests |
 | O3 / highest (first milestone) | DNS diagnostics correctness | Compare focuses on A/AAAA; detailed records via system resolver | Expose raw RCODE (NOERROR/NXDOMAIN/SERVFAIL/REFUSED), TTL, SOA/CAA/SRV, CNAME comparison; distinguish transport errors from authoritative negative answers; do not label any difference as poisoning |
 | O4 / high (implemented) | TLS verification classification | Handshake, peer cert and verification exist | Distinguish expired/not-yet-valid, hostname mismatch, untrusted chain, handshake failure and timeout; optionally show SAN, SNI/ALPN and chain; never claim valid because handshake succeeded |
-| O5 / high | Domain apex and CDN accuracy | Small hand-written suffix list; CNAME/header evidence | Evaluate an updatable Public Suffix List under zero-external-Go-dependency constraint; preserve explicit-subdomain semantics; keep unknown/conflicting CDN evidence and handle flattened CNAME conservatively |
+| O5 / high (implemented) | Domain apex and CDN accuracy | Small hand-written suffix list; CNAME/header evidence | Evaluate an updatable Public Suffix List under zero-external-Go-dependency constraint; preserve explicit-subdomain semantics; keep unknown/conflicting CDN evidence and handle flattened CNAME conservatively |
 
 ### Reliability and developer-experience gates
 
@@ -119,6 +119,6 @@ Tests above may legitimately return nonzero (for example, blocked or closed port
 - [x] O3 phase 2: `dns compare -detail -type TYPE` adds public DoH RCODE, TTL and answer comparisons alongside the existing system DNS results; baseline comparison now includes CNAME; offline tests cover differing responses and failed providers.
 - [ ] Future: native DNS wire queries for authoritative paths and explicit OS RCODE/TTL (do not conflate resolver APIs with wire-level observations).
 - [x] O4 TLS error classification: stable `verification_code` and `connection_code` with typed x509/net error matching, validity/hostname/authority distinctions and offline tests.
-- [ ] O5 suffix/CDN improvements.
+- [x] O5 domain suffix / CDN evidence: embedded Mozilla Public Suffix List with ICANN/PRIVATE, wildcard/exception and Unicode-to-Punycode rule handling; redirect-safe CNAME versus final HTTP header evidence, unknown/conflict distinctions, deterministic offline tests.
 
 No Homebrew Tap change: only an official tagged GitHub Release will trigger the next formula update.
