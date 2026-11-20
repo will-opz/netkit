@@ -6,6 +6,7 @@ import (
  "errors"
  "flag"
  "fmt"
+ "net"
  "io"
  "net/http"
  "net/url"
@@ -73,7 +74,12 @@ func traceHTTP(ctx context.Context,client *http.Client,target string,limit int)H
   started:=time.Now()
   res,err:=probe.Do(req)
   elapsed:=time.Since(started).Milliseconds()
-  if err!=nil{r.Status="network_error";r.Error=err.Error();r.FinalURL=current;return r}
+  if err!=nil{
+   r.Status="network_error"
+   var ne net.Error
+   if errors.Is(err,context.DeadlineExceeded)||(errors.As(err,&ne)&&ne.Timeout()){r.Status="timeout"}
+   r.Error=err.Error();r.FinalURL=current;return r
+  }
   // Drain no body: reading arbitrary HTML is unnecessary for redirect diagnosis.
   io.Copy(io.Discard,io.LimitReader(res.Body,0))
   res.Body.Close()
