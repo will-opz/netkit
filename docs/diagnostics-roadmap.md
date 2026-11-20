@@ -122,3 +122,14 @@ Tests above may legitimately return nonzero (for example, blocked or closed port
 - [x] O5 domain suffix / CDN evidence: embedded Mozilla Public Suffix List with ICANN/PRIVATE, wildcard/exception and Unicode-to-Punycode rule handling; redirect-safe CNAME versus final HTTP header evidence, unknown/conflict distinctions, deterministic offline tests.
 
 No Homebrew Tap change: only an official tagged GitHub Release will trigger the next formula update.
+
+### Pre-release quality pass (2026-11-20)
+
+- [x] Fix `make deploy` Make/shell expansion: only consult and install/upgrade the published Homebrew formula, without changing the Tap.
+- [x] Add macOS + Linux CI runtime test matrix, and compile-check Windows amd64 and ARM64 release targets on Linux.
+- [x] Add JSON output contract tests for TLS, TCP, HTTP, DNS query and DNS compare; verify unobserved HTTP phases are omitted.
+- [x] Differentiate HTTP transport timeout from other network errors.
+- [x] Accept `localhost` for explicit local TLS/TCP checks.
+- [x] Remove OS-specific `127.0.0.2` routing assumptions from TCP tests, injecting a deterministic dialer for simulated failures.
+- [ ] Further release engineering: tagged GitHub Release with artifact provenance, checksums and Tap update only on official release; no tag or Tap update in this pass.
+- [ ] Consider future JSON schema versioning/JSONL and differentiated exit codes in an explicit compatibility release, not as a silent breaking change.
