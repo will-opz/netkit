@@ -67,8 +67,8 @@ Peer tools reviewed for product direction: `dig`, `doggo`, `dnsx` (DNS and bulk)
 
 | Order | Work | Current NetKit baseline | Concrete acceptance criteria |
 | --- | --- | --- | --- |
-| O1 / highest | HTTP per-phase timing via Go `net/http/httptrace` | Each redirect hop has only total elapsed time | Report DNS, connect, TLS, TTFB and total per hop when observable; indicate connection reuse, proxies and unavailable stages instead of inventing zeros; JSON and deterministic `httptest` coverage |
-| O2 / highest | TCP `-all-ips` opt-in | Stops after first successful resolved address | Default behavior unchanged; explicit flag checks each resolved A/AAAA address, bounded overall timeout, stable address order, per-IP status and failure evidence; IPv4/IPv6 local tests |
+| O1 / highest (implemented) | HTTP per-phase timing via Go `net/http/httptrace` | Each redirect hop previously had only total elapsed time | Report DNS, connect, TLS, TTFB and total per hop when observable; indicate connection reuse, proxies and unavailable stages instead of inventing zeros; JSON and deterministic `httptest` coverage |
+| O2 / highest (implemented) | TCP `-all-ips` opt-in | Default still stops after first successful resolved address | Default behavior unchanged; explicit flag checks each resolved A/AAAA address, bounded overall timeout, stable address order, per-IP status and failure evidence; IPv4/IPv6 local tests |
 | O3 / highest | DNS diagnostics correctness | Compare focuses on A/AAAA; detailed records via system resolver | Expose raw RCODE (NOERROR/NXDOMAIN/SERVFAIL/REFUSED), TTL, SOA/CAA/SRV, CNAME comparison; distinguish transport errors from authoritative negative answers; do not label any difference as poisoning |
 | O4 / high | TLS verification classification | Handshake, peer cert and verification exist | Distinguish expired/not-yet-valid, hostname mismatch, untrusted chain, handshake failure and timeout; optionally show SAN, SNI/ALPN and chain; never claim valid because handshake succeeded |
 | O5 / high | Domain apex and CDN accuracy | Small hand-written suffix list; CNAME/header evidence | Evaluate an updatable Public Suffix List under zero-external-Go-dependency constraint; preserve explicit-subdomain semantics; keep unknown/conflicting CDN evidence and handle flattened CNAME conservatively |
@@ -110,3 +110,13 @@ From a local checkout, run `git pull --ff-only && make build && make check`, the
 ```
 
 Tests above may legitimately return nonzero (for example, blocked or closed ports, certificate validation errors or restricted HTTP access); inspect the detailed evidence rather than interpreting every failure as a NetKit bug.
+
+### Iteration status (2026-11-20)
+
+- [x] O1 HTTP phases: local `httptrace` callbacks for DNS/connect/TLS/TTFB, nullable durations in JSON, explicit connection reuse, loopback HTTP/TLS tests, preserve redirect-hop totals.
+- [x] O2 TCP all-IPs: opt-in sequential per-address checks under overall timeout, explicit `partial_failure` and counters, retains default early success; offline local tests.
+- [ ] O3 DNS response status and TTL, SOA/CAA/SRV.
+- [ ] O4 TLS error classification.
+- [ ] O5 suffix/CDN improvements.
+
+No Homebrew Tap change: only an official tagged GitHub Release will trigger the next formula update.
