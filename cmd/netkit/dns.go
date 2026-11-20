@@ -12,6 +12,7 @@ import (
  "time"
  "context"
  "net"
+ "net/netip"
 )
 
 // DNSResolver describes OS resolver configuration, not proof of which upstream
@@ -145,5 +146,29 @@ func runDNS(args []string)error{
   if len(r.SearchDomains)>0{fmt.Println("    Search:",strings.Join(r.SearchDomains,", "))}
  }
  for _,warning:=range info.Warnings{fmt.Fprintln(os.Stderr,"DNS:",warning)}
+ return nil
+}
+
+// KnownDNS is a positive, exact match against the built-in public DNS list.
+// A nil match only means "not listed"; it does not prove a host is not a DNS resolver.
+type KnownDNS struct {
+ Provider string `json:"provider"`
+ Role string `json:"role"`
+ Match string `json:"match"`
+ DoH string `json:"doh,omitempty"`
+}
+func identifyPublicDNS(raw string)*KnownDNS {
+ target,err:=netip.ParseAddr(raw)
+ if err!=nil||target.Zone()!="" {return nil}
+ target=target.Unmap()
+ for _,p:=range publicDNS {
+  for _,address:=range append(append([]string{},p.IPv4...),p.IPv6...){
+   parsed,err:=netip.ParseAddr(address)
+   if err!=nil{continue}
+   if parsed.Unmap()==target{
+    return &KnownDNS{Provider:p.Name,Role:"public_recursive_resolver",Match:"static_exact_ip",DoH:p.DoH}
+   }
+  }
+ }
  return nil
 }
