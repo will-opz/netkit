@@ -28,6 +28,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit dns                                 # 本机 DNS 配置
 ./netkit dns --output json                   # 本机 DNS 配置 JSON
 ./netkit dns list                            # 常用公共 DNS 清单
+./netkit dns compare baidu.com               # 比较本机/Cloudflare/Google DNS 结果
+./netkit dns compare --output json baidu.com # DNS 对比 JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
 ./netkit domain example.com                  # 主域名和 www 的 CDN/网站可用性 + 注册信息
 ./netkit domain records example.com          # 详细 A/AAAA/MX/NS/TXT/CNAME 记录
@@ -69,6 +71,8 @@ Only the specific public resolver addresses in the catalog are recognized: the p
 
 - **Automatic routing:** `netkit <IPv4|IPv6>` is equivalent to `netkit ip <IP>`, while `netkit example.com` is equivalent to `netkit domain example.com`. Explicit `ip`, `dns`, `domain` subcommands take priority. Bare `netkit` still shows the local network overview. Domain auto-detection accepts ASCII/Punycode hostnames; URLs and Unicode IDNs are not accepted directly.
 - **System DNS:** `netkit dns` shows resolver addresses and metadata. On macOS it reads `scutil --dns` (including supplemental and scoped resolver entries), with a fallback to `/etc/resolv.conf`. On Linux it reads `/etc/resolv.conf`. Displayed settings are configuration evidence, not proof of the actual server used by every app or encrypted DNS client.
+- **Resolver comparison:** `netkit dns compare baidu.com` compares A/AAAA and canonical CNAME results from system DNS, Cloudflare (`1.1.1.1:53`), and Google (`8.8.8.8:53`) concurrently. It uses Go standard-library resolvers with bounded timeouts, supports `--output json` and `-timeout 8s`, and reports each resolver error independently. Differences are diagnostic signals only: CDN/GeoDNS and ECS/location routing can legitimately vary answers. Network policy/VPN may block direct DNS port 53.
+- **Release policy:** day-to-day commits on `main` do **not** update `will-opz/homebrew-tap`. Update the Homebrew formula only after an official version tag and GitHub Release have been created and validated; a pending feature does not bump the Tap.
 - **Public DNS directory:** `netkit dns list` prints fixed reference addresses for Cloudflare, Google, Quad9 and AdGuard (IPv4/IPv6 and DoH URL). This is not a live availability, speed or security assessment.
 - **Default domain overview:** `netkit baidu.com` checks the apex and `www.baidu.com` only, reporting HTTPS reachability (with HTTP fallback when HTTPS fails), status code, latency, CDN indicators and RDAP registration details. `netkit www.baidu.com` or any explicitly supplied subdomain checks only that hostname. Apex inference uses a conservative, small common-suffix list, not a full Public Suffix List: for unusual public suffixes, specify each desired hostname explicitly.
 - **CDN identification:** based on a recognized CNAME suffix (stronger evidence) or combinations of characteristic HTTP headers (labeled a hint, not proof). Conflicting evidence is labeled as such; otherwise unknown remains unknown. CDN services can flatten CNAMEs or suppress headers, so false negatives are possible. No claim of DNSSEC or end-to-end browser health is made.
