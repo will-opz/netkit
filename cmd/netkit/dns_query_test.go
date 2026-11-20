@@ -63,7 +63,7 @@ func TestDNSQueryRecordVariations(t *testing.T){
  server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
   w.Header().Set("Content-Type","application/dns-json")
   w.Write([]byte(`{"Status":0,"Answer":[
-   {"name":"example.com.","type":257,"TTL":600,"data":"0 issue \\"letsencrypt.org\\""},
+   {"name":"example.com.","type":257,"TTL":600,"data":"0 issue \"letsencrypt.org\""},
    {"name":"_sip._tcp.example.com.","type":33,"TTL":120,"data":"10 5 5060 sip.example.com."}
   ]}`))
  }))
