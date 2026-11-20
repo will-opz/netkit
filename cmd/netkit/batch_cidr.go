@@ -9,6 +9,7 @@ import (
  "net/netip"
  "strings"
  "sync"
+ "time"
 )
 
 // CIDRReport is offline-only. IPv6 has no broadcast address.
@@ -123,6 +124,34 @@ func lookupBatch(ips []string,workers int,fn batchLookupFn)[]Result{
   }()
  }
  for i:=range ips{jobs<-i}
+ close(jobs)
+ wg.Wait()
+ return results
+}
+
+// lookupBatchPaced caps the rate of starting complete multi-provider lookups.
+// The default 1.5s interval is conservative for ip-api.com's free 45/min cap
+// for a single local invocation; other concurrent processes are not tracked.
+func lookupBatchPaced(ips []string,workers int,interval time.Duration,fn batchLookupFn)[]Result {
+ if interval<=0 {return lookupBatch(ips,workers,fn)}
+ if workers<1 {workers=1}
+ if workers>4 {workers=4}
+ results:=make([]Result,len(ips))
+ jobs:=make(chan int)
+ var wg sync.WaitGroup
+ for i:=0;i<workers;i++ {
+  wg.Add(1)
+  go func(){
+   defer wg.Done()
+   for index:=range jobs{results[index]=fn(ips[index])}
+  }()
+ }
+ ticker:=time.NewTicker(interval)
+ defer ticker.Stop()
+ for i:=range ips {
+  if i>0 {<-ticker.C}
+  jobs<-i
+ }
  close(jobs)
  wg.Wait()
  return results
