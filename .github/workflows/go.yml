@@ -57,6 +57,9 @@ jobs:
           /tmp/netkit tls -h
           /tmp/netkit http -h
           /tmp/netkit tcp -h
+          /tmp/netkit diagnose -h
+          if /tmp/netkit diagnose --output json http://127.0.0.1:1/ >/tmp/netkit-diagnose.json 2>/tmp/netkit-diagnose-err.txt; then exit 1; fi
+          python3 -c 'import json; r=json.load(open("/tmp/netkit-diagnose.json")); assert r["schema_version"]=="1" and r["first_failure"] in ("tcp.1","dns.1")'
           /tmp/netkit tcp -all-ips --output json 127.0.0.1 1 > /tmp/tcp-all.json || test $? -eq 2
           /tmp/netkit dns query -h
           /tmp/netkit dns compare -h
