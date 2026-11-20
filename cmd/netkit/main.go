@@ -103,7 +103,14 @@ var providers = []provider{
  {"api.ip.sb", "https://api.ip.sb/geoip/%s"},
 }
 
+// With no subcommand, show the same local-network report as "netkit ip".
+// Explicit help and future subcommands continue to use the existing dispatcher.
+func defaultCommandArgs(args []string) []string {
+ if len(args)==1 {return append(args,"ip")}
+ return args
+}
 func main() {
+ os.Args=defaultCommandArgs(os.Args)
  if len(os.Args)<2 || os.Args[1]=="-h" || os.Args[1]=="--help" || os.Args[1]=="help" {
   fmt.Println("NetKit：网络诊断工具箱")
   fmt.Println("Usage: netkit ip [options] [IPv4|IPv6 ...]")
