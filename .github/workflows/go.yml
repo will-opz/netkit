@@ -30,6 +30,8 @@ jobs:
         run: |
           /tmp/netkit --help
           /tmp/netkit ip --help
+          /tmp/netkit domain -h
+          /tmp/netkit domain records -h
           /tmp/netkit dns list --output json > /tmp/public-dns.json
           /tmp/netkit ip -cidr 192.168.31.158/24 > /tmp/cidr.txt
           /tmp/netkit ip 192.168.1.1 > /tmp/private.txt
