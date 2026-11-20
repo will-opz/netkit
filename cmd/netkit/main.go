@@ -79,6 +79,9 @@ type Result struct {
  Summary Summary `json:"summary"`
  Sources []Source `json:"sources,omitempty"`
  Whois Registry `json:"whois"`
+ RDAP *RDAPInfo `json:"rdap,omitempty"`
+ PTR *PTRInfo `json:"ptr,omitempty"`
+ BGP *BGPInfo `json:"bgp,omitempty"`
 }
 
 type InterfaceInfo struct {
@@ -137,6 +140,9 @@ func printRootHelp() {
  fmt.Println("  -whois               仅查询 WHOIS")
  fmt.Println("  -lang zh|en          输出语言（默认 zh）")
  fmt.Println("  -timeout 5s          单请求超时")
+ fmt.Println("  -rdap                HTTPS RDAP 注册信息")
+ fmt.Println("  -rdns                反向 DNS PTR")
+ fmt.Println("  -bgp                 RIPE RIS BGP 宣告信息")
  fmt.Println()
  fmt.Println("示例:")
  fmt.Println("  netkit ip 8.8.8.8")
@@ -160,6 +166,9 @@ func main() {
  jsonFlag := flag.Bool("json", false, "JSON 输出兼容别名（等同于 --output json）")
  output := flag.String("output", "text", "输出格式：text（默认）或 json")
  timeout := flag.Duration("timeout", 5*time.Second, "每个请求的超时时间")
+ rdap := flag.Bool("rdap", false, "查询 HTTPS RDAP 注册信息")
+ rdns := flag.Bool("rdns", false, "查询反向 DNS PTR")
+ bgp := flag.Bool("bgp", false, "查询 RIPE RIS BGP 前缀与宣告 ASN")
  lang := flag.String("lang", "zh", "输出语言：zh（默认中文）、en（英文）")
  flag.Usage = func() {
   fmt.Fprintln(flag.CommandLine.Output(), "Usage: netkit ip [options] [IPv4|IPv6 ...]")
@@ -185,6 +194,7 @@ func main() {
   }
   return
  }
+ enrich:=*rdap||*rdns||*bgp
  results:=make([]Result,0,len(ips))
  seen:=map[string]bool{}
  invalid:=false
@@ -193,7 +203,9 @@ func main() {
   if ip==nil {fmt.Fprintln(os.Stderr,"无效 IP:",input);invalid=true;continue}
   key:=ip.String()
   if seen[key] {continue};seen[key]=true
-  results=append(results,lookup(client,key,*timeout,*whoisOnly))
+  result:=lookup(client,key,*timeout,*whoisOnly)
+  if enrich&&result.Scope=="public" {enrichIP(client,&result,*timeout,*rdap,*rdns,*bgp)}
+  results=append(results,result)
  }
  if format=="json" {
   b,err:=json.MarshalIndent(results,"","  ")
@@ -202,6 +214,7 @@ func main() {
  } else {
   for _,r:=range results {
    if *all {printResult(r,true,*whoisOnly,*lang)} else {printCompact(r,*whoisOnly,*lang)}
+   if enrich {printEnrichment(r,*lang)}
   }
  }
  if invalid||len(results)==0 {os.Exit(2)}
