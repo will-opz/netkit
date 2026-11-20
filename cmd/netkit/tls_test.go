@@ -3,7 +3,6 @@ package main
 import (
  "crypto/tls"
  "crypto/x509"
- "context"
  "errors"
  "net"
  "net/http"
@@ -74,12 +73,10 @@ func TestTLSVerificationClassification(t *testing.T){
  if got:=classifyTLSVerification(nil,leaf,now);got!=""{t.Fatalf("success classified as %s",got)}
 }
 func TestTLSConnectionClassification(t *testing.T){
- ctx,cancel:=context.WithCancel(context.Background());defer cancel()
  if got:=classifyTLSConnection(context.DeadlineExceeded);got!="timeout"{t.Fatalf("deadline: %s",got)}
  if got:=classifyTLSConnection(&net.OpError{Op:"dial",Err:errors.New("connection refused")});got!="tcp_connect_failed"{t.Fatalf("dial: %s",got)}
  if got:=classifyTLSConnection(tls.RecordHeaderError{Msg:"not a TLS server"});got!="tls_handshake_failed"{t.Fatalf("record: %s",got)}
  if got:=classifyTLSConnection(nil);got!=""{t.Fatalf("success classified: %s",got)}
- _=ctx
 }
 func TestTLSLocalClassificationIntegration(t *testing.T){
  server:=httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.WriteHeader(http.StatusOK)}))
