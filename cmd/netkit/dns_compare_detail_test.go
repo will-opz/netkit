@@ -69,3 +69,11 @@ func TestDNSDetailHTTPFixturesAndPresentation(t *testing.T){
  out:=formatDNSCompareDetail(result,"zh")
  if !strings.Contains(out,"仅公共解析器")||!strings.Contains(out,"TTL"){t.Fatalf("misleading output: %s",out)}
 }
+
+func TestDNSResolverSignatureIncludesCNAME(t *testing.T){
+ a:=DNSResolverResult{A:[]string{"192.0.2.1"},CNAME:"one.example.com"}
+ b:=DNSResolverResult{A:[]string{"192.0.2.1"},CNAME:"two.example.com"}
+ if dnsResolverSignature(a)==dnsResolverSignature(b){t.Fatal("CNAME difference ignored")}
+ b.CNAME="ONE.EXAMPLE.COM"
+ if dnsResolverSignature(a)!=dnsResolverSignature(b){t.Fatal("case-only CNAME difference must not count")}
+}
