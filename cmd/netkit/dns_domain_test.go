@@ -53,3 +53,33 @@ func TestOptionalDNSRecordMissing(t *testing.T){
  if isOptionalRecordMissing("A/AAAA",missing) {t.Fatal("missing A/AAAA should remain visible")}
  if isOptionalRecordMissing("MX",errors.New("timeout")) {t.Fatal("unexpected timeout suppression")}
 }
+
+func TestIdentifyPublicDNSExactMatch(t *testing.T){
+ tests:=[]struct{ip,provider string}{
+  {"8.8.8.8","Google Public DNS"},
+  {"8.8.4.4","Google Public DNS"},
+  {"2001:4860:4860::8888","Google Public DNS"},
+  {"1.1.1.1","Cloudflare"},
+  {"2606:4700:4700:0:0:0:0:1111","Cloudflare"},
+  {"9.9.9.9","Quad9"},
+  {"94.140.14.14","AdGuard DNS"},
+ }
+ for _,tc:=range tests{
+  found:=identifyPublicDNS(tc.ip)
+  if found==nil||found.Provider!=tc.provider||found.Match!="static_exact_ip"{
+   t.Fatalf("identifyPublicDNS(%s) = %+v; want %s",tc.ip,found,tc.provider)
+  }
+ }
+ for _,ip:=range []string{"8.8.8.7","192.168.1.1","203.0.113.10","2606:4700:4700::2222","not-ip"}{
+  if got:=identifyPublicDNS(ip);got!=nil{t.Fatalf("unexpected catalog match for %s: %+v",ip,got)}
+ }
+}
+func TestPublicDNSLookupAnnotationWithoutNetwork(t *testing.T){
+ ip:="8.8.8.8"
+ r:=Result{IP:ip,Scope:"public",KnownDNS:identifyPublicDNS(ip)}
+ zh:=compactLine(r,false,"zh")
+ en:=compactLine(r,false,"en")
+ if !strings.Contains(zh,"公共 DNS: Google Public DNS")||!strings.Contains(en,"Public DNS: Google Public DNS"){t.Fatalf("missing DNS label: %s / %s",zh,en)}
+ ordinary:=Result{IP:"8.8.8.7",Scope:"public"}
+ if strings.Contains(compactLine(ordinary,false,"zh"),"公共 DNS:"){t.Fatal("false positive for non-catalog IP")}
+}
