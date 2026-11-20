@@ -52,3 +52,9 @@ func TestLookupBatchOrderAndLimit(t *testing.T){
  })
  for i,r:=range result {if r.IP!=ips[i] {t.Fatalf("index %d: %q",i,r.IP)}}
 }
+
+func TestBatchPacingKeepsOrder(t *testing.T){
+ ips:=[]string{"1","2","3"}
+ result:=lookupBatchPaced(ips,2,time.Millisecond,func(ip string)Result{return Result{IP:ip}})
+ for i,r:=range result{if r.IP!=ips[i]{t.Fatalf("result order: %+v",result)}}
+}
