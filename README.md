@@ -34,6 +34,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit tls -port 8443 --output json example.com # 自定义端口和 JSON
 ./netkit http example.com                    # HTTP 状态和跳转链
 ./netkit http --output json https://example.com/path # HTTP 逐跳 JSON
+./netkit tcp example.com 443                 # DNS + TCP 连接诊断
+./netkit tcp --output json 127.0.0.1 5432    # 本地服务 TCP JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
 ./netkit domain example.com                  # 主域名和 www 的 CDN/网站可用性 + 注册信息
 ./netkit domain records example.com          # 详细 A/AAAA/MX/NS/TXT/CNAME 记录
@@ -64,6 +66,12 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## TCP reachability diagnostics (P0.3)
+
+`netkit tcp example.com 443` performs a local DNS lookup (or skips DNS for a literal IPv4/IPv6 address) then attempts TCP connections to resolved addresses, stopping on first success. Reports DNS latency, resolved IP addresses, address family, per-attempt TCP latency, connected IP and error details. If one address fails, it tries the next, subject to a **single overall timeout** (`-timeout 5s`). Works with loopback/private hosts for local operations. This does **not** verify TLS certificates, send HTTP requests, or prove the application is healthy.
+
+Failure categories: `dns_error`, `connect_error`, `timeout`; success: `connected`. Text supports `-lang zh|en`, `--output json` provides structured details. Exit status is nonzero on failure. The observation is made **from the machine executing NetKit**, so it may differ under VPN, container or firewall routing.
 
 ## HTTP redirect diagnostics (P0.2)
 
