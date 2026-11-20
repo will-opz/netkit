@@ -58,6 +58,11 @@ jobs:
           /tmp/netkit http -h
           /tmp/netkit tcp -h
           /tmp/netkit diagnose -h
+          /tmp/netkit config --help
+          export NETKIT_TEST_HOME="$(mktemp -d)"
+          HOME="$NETKIT_TEST_HOME" /tmp/netkit config init
+          HOME="$NETKIT_TEST_HOME" /tmp/netkit config show > /tmp/netkit-config-status.txt
+          python3 -c 'import json,os,pathlib; p=pathlib.Path(os.environ["NETKIT_TEST_HOME"])/".config/netkit/config.json"; d=json.loads(p.read_text()); assert "api_key" not in p.read_text() and d["ai"]["credential"]["service"]=="netkit.ai"'
           if /tmp/netkit diagnose --output json http://127.0.0.1:1/ >/tmp/netkit-diagnose.json 2>/tmp/netkit-diagnose-err.txt; then exit 1; fi
           python3 -c 'import json; r=json.load(open("/tmp/netkit-diagnose.json")); assert r["schema_version"]=="1" and r["first_failure"] in ("tcp.1","dns.1")'
           /tmp/netkit tcp -all-ips --output json 127.0.0.1 1 > /tmp/tcp-all.json || test $? -eq 2
