@@ -30,6 +30,12 @@ jobs:
         run: go test ./...
       - name: Vet
         run: go vet ./...
+      - name: Release package dry-run (no Tag or publication)
+        if: runner.os == 'Linux'
+        run: |
+          python3 scripts/package_release.py --version dev --output dist
+          python3 scripts/check_release.py --version dev --dist dist
+          ( cd dist && sha256sum -c checksums.txt )
       - name: Cross-platform compilation
         if: runner.os == 'Linux'
         run: |
@@ -39,6 +45,8 @@ jobs:
       - name: CLI smoke test
         run: |
           /tmp/netkit --help
+          /tmp/netkit version
+          /tmp/netkit version --output=json > /tmp/netkit-version.json
           /tmp/netkit ip --help
           /tmp/netkit domain -h
           /tmp/netkit domain records -h
