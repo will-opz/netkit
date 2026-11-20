@@ -34,6 +34,7 @@ jobs:
           /tmp/netkit domain records -h
           /tmp/netkit tls -h
           /tmp/netkit http -h
+          /tmp/netkit tcp -h
           /tmp/netkit dns list --output json > /tmp/public-dns.json
           /tmp/netkit ip -cidr 192.168.31.158/24 > /tmp/cidr.txt
           /tmp/netkit ip 192.168.1.1 > /tmp/private.txt
