@@ -204,6 +204,27 @@ Reference documentation: [RFC 9224](https://www.rfc-editor.org/rfc/rfc9224), [RI
 
 GeoIP endpoints are queried concurrently alongside WHOIS, with independent timeouts and error reporting. WHOIS registration country is not a geolocation. Multiple agreeing API responses are not necessarily independent data sets; provider limits and terms still apply.
 
+## Pre-release reliability checks (2026-11-20)
+
+- CI runs unit tests, `go vet`, CLI smoke checks and builds on **macOS and Ubuntu**. The Linux runner also cross-compiles Windows amd64, macOS arm64 and Linux arm64 binaries; cross-compilation alone is **not** a Windows runtime test.
+- Command JSON contracts have deterministic regression tests for existing TCP, HTTP, TLS, DNS query and DNS compare fields. Optional fields remain omitted when unobserved. A richer, versioned JSON schema and JSONL remain future work.
+- `netkit tcp localhost PORT` and `netkit tls localhost` are supported intentionally for local diagnostics. A TLS certificate still must pass hostname and trust verification to be marked valid.
+- HTTP transport timeouts use status `timeout`, separate from other `network_error` failures. A request can still fail in other ways while retaining the observed redirect evidence.
+- CLI subcommands currently exit **0 for their defined success**, **2 for usage or diagnostic failure** (because the top-level dispatcher maps returned errors to status 2). JSON data is written before the nonzero diagnostic exit when the command supports JSON. Future differentiated exit codes require an explicit compatibility decision.
+- `make deploy` runs only the **already published Homebrew Tap** formula; its installed-version detection and prefix now execute in the shell, not as Make variable expansion. This does not trigger publishing or modify the Tap.
+
+Local regression commands:
+
+```sh
+make build
+make check
+go test ./cmd/netkit -run 'TestCLIJSONContract|TestHTTPDeadline|TestTCPFallback|TestTCPAllIPs'
+./netkit tcp localhost 443
+./netkit tls localhost
+```
+
+The last two commands may intentionally fail when no service listens or the certificate is untrusted.
+
 ## Development
 
 ```sh
