@@ -3,7 +3,7 @@ SHELL := /bin/sh
 
 BINARY := netkit
 PACKAGE := ./cmd/netkit
-INSTALL_DIR ?= $(HOME)/.local/bin
+BREW_FORMULA := will-opz/tap/netkit
 
 .PHONY: all update build deploy test vet check fmt clean help
 
@@ -19,11 +19,17 @@ build:
 	@echo "Built ./$(BINARY)"
 
 
-# Build locally and install to the user's personal bin directory; no sudo.
-deploy: build
-	@mkdir -p "$(INSTALL_DIR)"
-	@install -m 755 "$(BINARY)" "$(INSTALL_DIR)/$(BINARY)"
-	@echo "Installed $(INSTALL_DIR)/$(BINARY)"
+# Deploy the published Tap version; this does not install the local checkout.
+# "make build" remains available for developing the current source.
+deploy:
+	@command -v brew >/dev/null 2>&1 || { echo "Homebrew is required: https://brew.sh"; exit 1; }
+	@brew update
+	@if brew list --versions "$(BREW_FORMULA)" >/dev/null 2>&1 && [ -n "$(brew list --versions "$(BREW_FORMULA)")" ]; then \
+	  brew upgrade "$(BREW_FORMULA)" || { echo "Upgrade failed (possibly already current)."; exit 1; }; \
+	else \
+	  brew install "$(BREW_FORMULA)"; \
+	fi
+	@echo "Homebrew NetKit: $(brew --prefix "$(BREW_FORMULA)")/bin/netkit"
 
 test:
 	@go test ./...
@@ -42,7 +48,7 @@ clean:
 help:
 	@printf 'make          update (fast-forward only) and build\n'
 	@printf 'make build    compile without pulling\n'
-	@printf 'make deploy   build and install to ~/.local/bin/netkit\n'
+	@printf 'make deploy   install/upgrade published NetKit via Homebrew Tap\n'
 	@printf 'make update   git pull --ff-only\n'
 	@printf 'make check    go test and go vet\n'
 	@printf 'make fmt      gofmt Go source files\n'
