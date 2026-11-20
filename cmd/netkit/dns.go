@@ -121,6 +121,7 @@ func runDNS(args []string)error{
  comparing:=false
  if len(args)>0&&args[0]=="list" {listing=true;args=args[1:]}
  if len(args)>0&&args[0]=="compare" {comparing=true;args=args[1:]}
+ if len(args)>0&&(args[0]=="-h"||args[0]=="--help") {dnsHelp();return nil}
  fs:=flag.NewFlagSet("dns",flag.ContinueOnError)
  output:=fs.String("output","text","text/json")
  lang:=fs.String("lang","zh","zh/en")
