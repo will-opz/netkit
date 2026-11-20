@@ -39,6 +39,11 @@ Use `make deploy` to build and install to `~/.local/bin/netkit` (creates the dir
 ./netkit ip -rdap -rdns -bgp 8.8.8.8         # all three optional enrichments
 ./netkit ip -json 8.8.8.8                     # 旧版 JSON 参数，仍然兼容
 ./netkit ip -timeout 8s 2001:4860:4860::8888
+./netkit ip -cidr 192.168.31.158/24           # IPv4 网段、掩码、广播和地址数量
+./netkit ip -cidr 2001:db8::/126 -contains 2001:db8::3 # IPv6 网段包含判断
+printf '8.8.8.8\n1.1.1.1\n' | ./netkit ip -stdin  # 标准输入批量查询
+cat ips.txt | ./netkit ip -stdin --output json # 按输入顺序输出 JSON 数组
+cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
@@ -80,6 +85,13 @@ For flag parsing with the Go standard library, put options before positional IPs
 
 Reference documentation: [RFC 9224](https://www.rfc-editor.org/rfc/rfc9224), [RIPEstat network-info API](https://stat.ripe.net/docs/data-api/api-endpoints/network-info.html).
 
+## CIDR and stdin batch (V1.2)
+
+- **Offline CIDR calculator**: `netkit ip -cidr 192.168.31.158/24` prints the normalized network, version, mask (IPv4), first and last IP, IPv4 broadcast, usable-host count and total address count. `-contains <IP>` checks prefix membership. IPv6 uses arbitrary-precision counts and has no broadcast field. CIDR mode never contacts external APIs.
+- **Batch input**: `netkit ip -stdin` reads one IPv4 or IPv6 address per line. Blank lines and `#` comments are ignored. Duplicate addresses are removed; results retain first-seen order. Maximum 1,000 entries per invocation.
+- **Throttling**: `-workers 2` is the default bounded concurrency (range 1–4) and `-interval 1.5s` spaces out the start of separate lookups in stdin mode to reduce API rate-limit errors. Multiple independent processes are not coordinated; respect each data provider's limits. You can increase the interval or run `-whois` when HTTP APIs aren't required.
+- **Output**: `--output json` returns a single object for CIDR, or an array of IP results for stdin. Standard `netkit` without arguments continues to show the local network overview. In Go's standard flag parser, put options *before* the positional IPs.
+
 ## Data sources
 
 - ip-api.com (free API uses **unencrypted HTTP**)
@@ -101,7 +113,7 @@ go build ./cmd/netkit
 
 ## Roadmap
 
-- V1.1: stdin/batch input, field selection, bounded concurrent batch queries, caching and provider health checks.
+- V1.2: CIDR calculation and bounded stdin batch queries (available). Next: field selection, caching and provider health checks.
 - V2: RDAP, ASN and DNS.
 - V3: TCP/TLS/HTTP diagnostics and traceroute.
 
