@@ -143,6 +143,9 @@ func printRootHelp() {
  fmt.Println("  -rdap                HTTPS RDAP 注册信息")
  fmt.Println("  -rdns                反向 DNS PTR")
  fmt.Println("  -bgp                 RIPE RIS BGP 宣告信息")
+ fmt.Println("  -cidr PREFIX         本地 CIDR 网段计算（支持 -contains IP）")
+ fmt.Println("  -stdin               从标准输入读取 IP（每行一个）")
+ fmt.Println("  -workers N           批量查询并发数，默认 2，最多 4")
  fmt.Println()
  fmt.Println("示例:")
  fmt.Println("  netkit ip 8.8.8.8")
@@ -169,6 +172,10 @@ func main() {
  rdap := flag.Bool("rdap", false, "查询 HTTPS RDAP 注册信息")
  rdns := flag.Bool("rdns", false, "查询反向 DNS PTR")
  bgp := flag.Bool("bgp", false, "查询 RIPE RIS BGP 前缀与宣告 ASN")
+ cidr := flag.String("cidr", "", "离线分析 CIDR 网段")
+ contains := flag.String("contains", "", "检查指定 IP 是否属于 -cidr 网段")
+ stdin := flag.Bool("stdin", false, "从标准输入读取 IP（每行一个）")
+ workers := flag.Int("workers", 2, "批量查询并发数（1-4，默认 2）")
  lang := flag.String("lang", "zh", "输出语言：zh（默认中文）、en（英文）")
  flag.Usage = func() {
   fmt.Fprintln(flag.CommandLine.Output(), "Usage: netkit ip [options] [IPv4|IPv6 ...]")
@@ -181,8 +188,24 @@ func main() {
  *lang = strings.ToLower(strings.TrimSpace(*lang))
  if *lang!="zh" && *lang!="en" {fmt.Fprintln(os.Stderr,"-lang 仅支持 zh 或 en / supported: zh, en");os.Exit(2)}
  if *timeout <= 0 { fmt.Fprintln(os.Stderr, "超时时间必须大于 0"); os.Exit(2) }
+ if *workers<1||*workers>4 {fmt.Fprintln(os.Stderr,"-workers 必须是 1-4");os.Exit(2)}
+ if *cidr!="" {
+  if *stdin||len(flag.Args())>0 {fmt.Fprintln(os.Stderr,"-cidr 不可与位置 IP 或 -stdin 同时使用");os.Exit(2)}
+  result,err:=inspectCIDR(*cidr,*contains)
+  if err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  if format=="json" {b,_:=json.MarshalIndent(result,"","  ");fmt.Println(string(b))} else {fmt.Print(formatCIDR(result,*lang))}
+  return
+ }
+ if *contains!="" {fmt.Fprintln(os.Stderr,"-contains 需要同时指定 -cidr");os.Exit(2)}
  client := &http.Client{Transport: &http.Transport{Proxy:http.ProxyFromEnvironment, MaxIdleConns:16, IdleConnTimeout:30*time.Second}}
  ips := flag.Args()
+ if *stdin {
+  if len(ips)>0 {fmt.Fprintln(os.Stderr,"-stdin 不可与位置 IP 同时使用");os.Exit(2)}
+  var err error
+  ips,err=readIPs(os.Stdin,1000)
+  if err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(2)}
+  if len(ips)==0 {fmt.Fprintln(os.Stderr,"stdin 中没有 IP");os.Exit(2)}
+ }
  if len(ips)==0 {
   report:=inspectLocal(client,*timeout,*whoisOnly)
   if format=="json" {
@@ -195,18 +218,25 @@ func main() {
   return
  }
  enrich:=*rdap||*rdns||*bgp
- results:=make([]Result,0,len(ips))
+ validIPs:=make([]string,0,len(ips))
  seen:=map[string]bool{}
  invalid:=false
  for _,input:=range ips {
   ip:=net.ParseIP(input)
   if ip==nil {fmt.Fprintln(os.Stderr,"无效 IP:",input);invalid=true;continue}
   key:=ip.String()
-  if seen[key] {continue};seen[key]=true
+  if seen[key] {continue}
+  seen[key]=true
+  validIPs=append(validIPs,key)
+ }
+ // Keep single lookups sequential; stdin/bulk inputs have bounded concurrency.
+ concurrency:=1
+ if *stdin {concurrency=*workers}
+ results:=lookupBatch(validIPs,concurrency,func(key string)Result{
   result:=lookup(client,key,*timeout,*whoisOnly)
   if enrich&&result.Scope=="public" {enrichIP(client,&result,*timeout,*rdap,*rdns,*bgp)}
-  results=append(results,result)
- }
+  return result
+ })
  if format=="json" {
   b,err:=json.MarshalIndent(results,"","  ")
   if err!=nil {fmt.Fprintln(os.Stderr,err);os.Exit(1)}
