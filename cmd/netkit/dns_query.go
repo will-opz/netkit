@@ -143,7 +143,7 @@ func validDNSQueryName(raw string)bool{
  // Permit underscore-prefixed service labels such as _dmarc, _sip._tcp.
  // Validate every label and do not accept whitespace, URLs or trailing junk.
  name:=strings.TrimSuffix(raw,".")
- if len(name)<3||len(name)>253||strings.ContainsAny(name,":/@\\ \\t\\r\\n"){return false}
+ if len(name)<3||len(name)>253||strings.ContainsAny(name,":/@ ")||strings.ContainsRune(name,'\\')||strings.ContainsAny(name,"\t\r\n"){return false}
  parts:=strings.Split(name,".")
  if len(parts)<3{return false}
  hasUnderscore:=false
