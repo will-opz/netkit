@@ -99,6 +99,9 @@ func initializeLocalConfig()(string,error){
  return path,nil
 }
 func loadAISettings()(AISettings,error){
+ return loadAISettingsWithReader(readKeychainSecret)
+}
+func loadAISettingsWithReader(readSecret func(string,string)(string,error))(AISettings,error){
  cfg,_,err:=readLocalConfig()
  if err!=nil{return AISettings{},err}
  settings:=AISettings{BaseURL:cfg.AI.BaseURL,Model:cfg.AI.Model}
@@ -114,12 +117,13 @@ func loadAISettings()(AISettings,error){
   settings.APIKey=v
   return settings,nil // explicit env overrides Keychain without reading it
  }
+ if settings.Model==""{return settings,nil} // let analyzer request model before Keychain access
  endpoint,loopback,err:=aiEndpoint(settings.BaseURL)
  if err!=nil{return settings,err}
  _=endpoint
  if loopback{return settings,nil} // local Ollama needs no key
  if cfg.AI.Credential.Source=="keychain"{
-  key,err:=readKeychainSecret(cfg.AI.Credential.Service,cfg.AI.Credential.Account)
+  key,err:=readSecret(cfg.AI.Credential.Service,cfg.AI.Credential.Account)
   if err!=nil{return settings,err}
   settings.APIKey=key
  }
