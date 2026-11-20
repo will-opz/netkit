@@ -96,8 +96,10 @@ func probeTCPMode(ctx context.Context,host string,port int,resolve TCPResolver,a
    attempt.Connected=true
    conn.Close()
    report.Attempts=append(report.Attempts,attempt)
-   report.ConnectedIP=ip
-   if report.ConnectedIP==""{report.ConnectDurationMS=duration}
+   if report.ConnectedIP==""{
+    report.ConnectedIP=ip
+    report.ConnectDurationMS=duration
+   }
    report.SuccessCount++
    report.Status="connected"
    if !allIPs{return report}
