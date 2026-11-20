@@ -49,6 +49,8 @@ type EvidenceBundle struct {
  FirstFailure string `json:"first_failure,omitempty"`
  Stages []DiagnosticStage `json:"stages"`
  DurationMS int64 `json:"duration_ms"`
+ AIAnalysis *AIAnalysis `json:"ai_analysis,omitempty"`
+ AIError string `json:"ai_error,omitempty"`
 }
 type DiagnosticResolve func(context.Context,string)([]net.IPAddr,error)
 type DiagnosticProbes struct {
@@ -194,10 +196,10 @@ func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,pro
  return bundle
 }
 func diagnoseHelp(){
- fmt.Println("用法: netkit diagnose [-timeout 5s] [--output text|json] [-lang zh|en] HOST|URL")
+ fmt.Println("用法: netkit diagnose [-timeout 5s] [-ai] [-ai-allow-private] [--output text|json] [-lang zh|en] HOST|URL")
  fmt.Println("示例: netkit diagnose example.com")
  fmt.Println("      netkit diagnose --output json https://example.com")
- fmt.Println("只执行本机 DNS → TCP → TLS(HTTPS) → HTTP 诊断；不调用 AI，不检查全部子域名")
+ fmt.Println("默认只进行本机 DNS → TCP → TLS(HTTPS) → HTTP；-ai 可选接入 OpenAI-compatible API")
 }
 func runDiagnose(args []string)error{
  if len(args)==0||args[0]=="-h"||args[0]=="--help"{diagnoseHelp();return nil}
@@ -205,6 +207,8 @@ func runDiagnose(args []string)error{
  timeout:=fs.Duration("timeout",5*time.Second,"per-stage timeout")
  output:=fs.String("output","text","text or json")
  lang:=fs.String("lang","zh","zh or en")
+ ai:=fs.Bool("ai",false,"optional AI analysis via OpenAI-compatible Chat Completions")
+ allowPrivate:=fs.Bool("ai-allow-private",false,"explicitly permit sending private/internal target evidence to AI")
  if err:=fs.Parse(args);err!=nil{return err}
  if fs.NArg()!=1{return errors.New("expected one HOST or URL")}
  if *timeout<=0||*timeout>60*time.Second{return errors.New("-timeout must be between 1ns and 60s")}
@@ -216,6 +220,12 @@ func runDiagnose(args []string)error{
  ctx,cancel:=context.WithTimeout(context.Background(),10*(*timeout))
  defer cancel()
  result:=diagnose(ctx,plan,*timeout,defaultDiagnosticProbes())
+ if *ai{
+  settings:=settingsFromEnvironment()
+  settings.AllowPrivate=*allowPrivate
+  analysis,err:=analyzeWithAI(context.Background(),result,settings,nil)
+  if err!=nil{result.AIError=err.Error()}else{result.AIAnalysis=analysis}
+ }
  if format=="json"{
   b,err:=json.MarshalIndent(result,"","  ")
   if err!=nil{return err}
@@ -233,6 +243,11 @@ func runDiagnose(args []string)error{
   }else{fmt.Printf("Result: %s",result.Status)}
   if result.FirstFailure!=""{fmt.Printf(" | First failure: %s",result.FirstFailure)}
   fmt.Println()
+  if result.AIAnalysis!=nil{
+   fmt.Printf("AI [%s]: %s\n",result.AIAnalysis.Model,result.AIAnalysis.Summary)
+   for _,check:=range result.AIAnalysis.NextChecks{fmt.Printf("  - %s\n",check)}
+  }
+  if result.AIError!=""{fmt.Printf("AI unavailable: %s\n",result.AIError)}
  }
  if result.Status=="failed"{return fmt.Errorf("diagnose: %s",result.FirstFailure)}
  return nil
