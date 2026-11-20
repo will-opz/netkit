@@ -17,7 +17,8 @@ go build -o netkit ./cmd/netkit
 ```sh
 ./netkit --help
 ./netkit ip                                   # discover public IP
-./netkit ip 8.8.8.8                           # one-line summary
+./netkit ip 8.8.8.8                           # 默认中文单行汇总
+./netkit ip -lang en 8.8.8.8                  # English output
 ./netkit ip 8.8.8.8 1.1.1.1                   # one line per IP
 ./netkit ip -all 8.8.8.8                      # full WHOIS and per-provider JSON
 ./netkit ip -whois 8.8.8.8                    # TCP 43 only
@@ -32,12 +33,12 @@ Note: Go's standard `flag` parser expects options before IP arguments (e.g. `net
 By default, each IP produces **exactly one line**, suitable for terminals and batch scripts. Example of the format (illustrative, not live results):
 
 ```text
-8.8.8.8 | 美国 | AS15169 | Google LLC | Hosting: Yes | Sources: 4/4 | WHOIS: OK
+8.8.8.8 | 美国 | AS15169 | Google LLC | 机房: 是 | 数据源: 4/4 | WHOIS: OK
 ```
 
-`Sources: 4/4` counts successful HTTP providers; it **does not mean all four agree**. If reported country/region/city/ASN differs, a difference indicator is appended. `Hosting: Unknown` means no provider supplied a detection; it is not equivalent to `No`.
+Default output language is **Simplified Chinese** (`-lang zh`). Use `-lang en` for English. `数据源: 4/4` counts successful HTTP providers; it **does not mean all four agree**. If reported country/region/city/ASN differs, `GeoIP 差异` is appended. `机房: 未知` means no provider supplied a detection; it is not equivalent to `否`. Unknown country codes are left unchanged, and provider-supplied city and region names are not automatically translated.
 
-`-all` preserves the detailed, multi-line original results for troubleshooting. `-json` returns structured reports, including field-level agreements, alternatives and WHOIS.
+`-all` preserves the detailed, multi-line original results for troubleshooting (field labels localized, original provider JSON untouched). `-json` returns structured reports with **stable English keys and original country codes regardless of language**, including field-level agreements, alternatives and WHOIS. This keeps JSON consumers backward compatible.
 
 ## Data sources
 
