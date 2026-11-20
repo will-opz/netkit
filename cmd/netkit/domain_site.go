@@ -141,21 +141,25 @@ func checkWebsiteHost(name string,timeout time.Duration) WebsiteCheck{
  result=probeWebsite(ctx,client,name)
  wg.Wait()
  result.CNAME=cname
- // CNAME belongs to the requested hostname, but HTTP response headers may
- // belong to the final redirected hostname. Keep these as distinct evidence
- // rather than reporting a false CDN conflict across separate hosts.
+ applyWebsiteCDNEvidence(&result,name,cname)
+ return result
+}
+
+func applyWebsiteCDNEvidence(result *WebsiteCheck,name,cname string){
+ result.CNAME=cname
+ // Requested-host DNS and final-response HTTP headers may belong to
+ // different hosts after a redirect. Never merge them into a false conflict.
  dnsEvidence:=detectCDN(cname,nil)
- redirectedHost:=""
+ finalHost:=""
  if result.FinalURL!=""{
-  if u,err:=url.Parse(result.FinalURL);err==nil{redirectedHost=u.Hostname()}
+  if u,err:=url.Parse(result.FinalURL);err==nil{finalHost=u.Hostname()}
  }
- if redirectedHost!=""&&!strings.EqualFold(redirectedHost,name){
+ if finalHost!=""&&!strings.EqualFold(finalHost,name){
   if dnsEvidence.Provider!=""{result.DNSCDN=&dnsEvidence}
   result.CDN=detectCDN("",result.responseHeaders)
  }else{
   result.CDN=detectCDN(cname,result.responseHeaders)
  }
- return result
 }
 
 func inspectWebsites(domain string,timeout time.Duration)[]WebsiteCheck{
