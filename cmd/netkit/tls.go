@@ -8,7 +8,6 @@ import (
  "flag"
  "fmt"
  "net"
- "os"
  "strings"
  "time"
 )
@@ -47,8 +46,8 @@ func tlsVersionName(version uint16)string{
 // A diagnostic-only handshake collects the peer certificate even when it is
 // expired or untrusted. No application data is sent. The certificate is then
 // verified explicitly with system trust roots, correct hostname and intermediates.
-func inspectTLS(host string,port int,timeout time.Duration)TLSReport{
- report:=TLSReport{Host:host,Port:port}
+func inspectTLS(host string,port int,timeout time.Duration)(report TLSReport){
+ report=TLSReport{Host:host,Port:port}
  started:=time.Now()
  defer func(){report.DurationMS=time.Since(started).Milliseconds()}()
  address:=net.JoinHostPort(host,fmt.Sprint(port))
@@ -148,4 +147,3 @@ func runTLS(args []string)error{
  return nil
 }
 
-var _ = os.Stderr
