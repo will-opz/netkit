@@ -106,6 +106,15 @@ Failure categories: `dns_error`, `connect_error`, `timeout`; success: `connected
 
 `netkit http example.com` makes a local HTTPS request and traces up to five redirects (configurable with `-max-redirects 0..20`). Explicit `http://` or `https://` URLs and paths are preserved. Each HTTP hop records its status, latency and `Location` header; the final URL, redirect count and HTTPS-to-HTTP downgrades are reported. Loop, redirect limit, unsupported redirect scheme and connection failures are distinct. HTTP 401/403/407/429 classify as restricted, 4xx/5xx as HTTP errors. Status success means a 2xx final response; the command returns a nonzero exit code for other outcomes. It intentionally does not automatically inspect `www` or silently try HTTP after an HTTPS error. Use `--output json`, `-lang en`, `-timeout 5s`, `-max-redirects 5`. This is a **local probe** and intentionally permits private/local endpoints; do not expose it as an unrestricted remote API.
 
+## TLS error classification (O4)
+
+`netkit tls example.com` preserves the original `connected`, `verified`, `connection_error` and `verification_error` fields, and adds optional stable machine-readable codes:
+
+- `verification_code`: `cert_expired`, `cert_not_yet_valid`, `hostname_mismatch`, `untrusted_authority`, `invalid_key_usage`, `invalid_certificate`, `system_roots_error`, `no_peer_certificate` or `certificate_verification_failed`.
+- `connection_code`: `tcp_connect_failed`, `timeout` or `tls_handshake_failed`.
+
+Codes reflect **the primary observed failure**, not an exhaustive audit of every possible problem. A TLS handshake can succeed even if the peer certificate is expired, self-signed or for a different hostname. NetKit collects the presented certificate during a diagnostic handshake, then separately verifies it with system trust roots, hostname matching and server-auth usage. Human-readable Go/x509 error details remain available; no invalid certificate is reported as verified. Both text and `--output json` include classifications when present, and failure retains a nonzero exit status.
+
 ## TLS certificate diagnostics (P0.1)
 
 `netkit tls HOST` runs a local TCP/TLS handshake and shows the negotiated protocol, cipher, ALPN, certificate subject/issuer, validity dates and number of days remaining. It then **independently verifies** the peer's certificate against the machine's system trust store, intermediate chain, server-auth usage and requested host/IP. An expired, untrusted or hostname-mismatched certificate reports a verification error even if the handshake succeeded.
