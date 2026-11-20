@@ -69,7 +69,7 @@ Default output language is **Simplified Chinese** (`-lang zh`). Use `-lang en` f
 
 ## Optional IP enrichments (V1.1)
 
-The default `netkit ip <IP>` remains unchanged. Optional flags add independent, timeout-bounded information (shown below the summary, or structured under `rdap`, `ptr`, and `bgp` when `--output json` is used):
+GeoIP location candidates now merge a small, curated set of equivalent English/Chinese names (for example California/加利福尼亚州, Mountain View/山景城, Virginia/弗吉尼亚州, Ashburn/阿什本). The terminal shows localized labels with `-lang zh|en`; unknown names remain unchanged. Candidate grouping retains each API's original values in `sources[].data` and lists contributing provider names under `summary.locations[].sources`. This is normalization, not independent verification of physical location.\n\nRDAP now extracts registrant organizations and abuse contact emails from nested `entities` and `vcardArray` structures. The text view omits unknown countries instead of displaying a blank separator; `--output json` includes optional `rdap.organization`, `rdap.abuse_emails`, and role-tagged `rdap.contacts`. Missing country is not inferred from an address string.\n\nThe default `netkit ip <IP>` remains unchanged. Optional flags add independent, timeout-bounded information (shown below the summary, or structured under `rdap`, `ptr`, and `bgp` when `--output json` is used):
 
 - `-rdap`: download the IANA IPv4/IPv6 HTTPS bootstrap registry, longest-prefix match the IP, and query the selected registration server for the IP network. RDAP is authoritative registration data, **not a location claim**.
 - `-rdns`: perform a standard-library PTR reverse lookup; no PTR result is a normal outcome.
