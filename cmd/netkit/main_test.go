@@ -119,3 +119,35 @@ func TestDefaultCommandArgs(t *testing.T) {
   if !reflect.DeepEqual(got,tt.want) {t.Errorf("%v -> %v (want %v)",tt.in,got,tt.want)}
  }
 }
+
+func TestPrimaryInterfaces(t *testing.T) {
+ r:=LocalReport{
+  LocalIP:"192.168.31.158",
+  Gateways:[]GatewayInfo{{Family:"IPv4",Gateway:"192.168.31.1",Interface:"en0"}},
+  Interfaces:[]InterfaceInfo{
+   {Name:"en0",Addresses:[]string{"192.168.31.158/24","fe80::1/64"}},
+   {Name:"utun5",Addresses:[]string{"100.115.25.1/32"}},
+   {Name:"bridge100",Addresses:[]string{"192.168.139.3/23"}},
+  },
+ }
+ filtered:=primaryInterfaces(r)
+ if len(filtered)!=1||filtered[0].Name!="en0" {t.Fatalf("unexpected primary interfaces: %+v",filtered)}
+ output:=formatLocal(r,"zh",false,false)
+ if !strings.Contains(output,"192.168.31.1")||!strings.Contains(output,"已隐藏 2 个其他接口") {t.Fatalf("overview: %s",output)}
+ if strings.Contains(output,"bridge100")||strings.Contains(output,"utun5") {t.Fatalf("virtual interface leaked into overview: %s",output)}
+ full:=formatLocal(r,"zh",true,false)
+ if !strings.Contains(full,"bridge100")||!strings.Contains(full,"utun5") {t.Fatalf("missing full list: %s",full)}
+ english:=formatLocal(r,"en",false,false)
+ if !strings.Contains(english,"Local network overview") {t.Fatalf("english output: %s",english)}
+}
+func TestPrimaryInterfaceFromLocalIP(t *testing.T) {
+ r:=LocalReport{
+  LocalIP:"10.7.0.2",
+  Interfaces:[]InterfaceInfo{
+   {Name:"en0",Addresses:[]string{"192.168.31.158/24"}},
+   {Name:"utun6",Addresses:[]string{"10.7.0.2/24"}},
+  },
+ }
+ filtered:=primaryInterfaces(r)
+ if len(filtered)!=1||filtered[0].Name!="utun6" {t.Fatalf("unexpected selected interface: %+v",filtered)}
+}
