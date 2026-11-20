@@ -33,8 +33,9 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit tls example.com                     # TLS 握手、证书信任链、颁发者与到期时间
 ./netkit tls -port 8443 --output json example.com # 自定义端口和 JSON
 ./netkit http example.com                    # HTTP 状态和跳转链
-./netkit http --output json https://example.com/path # HTTP 逐跳 JSON
+./netkit http --output json https://example.com/path # HTTP 逐跳 JSON（含 DNS/TCP/TLS/TTFB 阶段）
 ./netkit tcp example.com 443                 # DNS + TCP 连接诊断
+./netkit tcp -all-ips example.com 443        # 逐个检测所有 A/AAAA 地址
 ./netkit tcp --output json 127.0.0.1 5432    # 本地服务 TCP JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
 ./netkit domain example.com                  # 主域名和 www 的 CDN/网站可用性 + 注册信息
@@ -66,6 +67,12 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## HTTP phase timing and TCP all-address checks (O1/O2)
+
+HTTP redirect hops now contain optional `phases` fields: `dns_ms`, `connect_ms`, `tls_ms`, `ttfb_ms` and `reused_connection`. Collected with Go's `net/http/httptrace` as direct observations. Unobserved phases are omitted rather than shown as zero (e.g. connection reuse, literal IP, custom transports, proxies). Time values are request-local and can overlap or reflect a proxy rather than the origin. The existing per-hop `duration_ms` remains unchanged. TTFB here means elapsed after the request is written until the first response byte, **not** the total time from initial DNS resolution.
+
+TCP's default remains fast: stop at the first successful IP. `netkit tcp -all-ips example.com 443` checks every unique resolved IPv4/IPv6 address **sequentially** within the same overall `-timeout` budget, returning `connected` when all tested addresses succeed, `partial_failure` when some connect and some fail, `connect_error` when none connect, or `timeout` if the budget expires. It includes `all_ips`, `success_count`, `failure_count`, and per-address attempts in JSON. A partial failure returns a nonzero process status; no single good backend masks a bad one. DNS order may vary by resolver.
 
 ## TCP reachability diagnostics (P0.3)
 
