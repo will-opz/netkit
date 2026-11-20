@@ -3,6 +3,9 @@ package main
 import (
  "strings"
  "testing"
+ "net"
+ "net/http"
+ "time"
 )
 
 func TestReferral(t *testing.T) {
@@ -68,4 +71,37 @@ func TestCompactLineLanguages(t *testing.T) {
  if !strings.Contains(zh,"美国")||!strings.Contains(zh,"机房: 是")||!strings.Contains(zh,"数据源: 3/4")||!strings.Contains(zh,"GeoIP 差异: 地区") {t.Errorf("zh: %s",zh)}
  if !strings.Contains(en,"US")||!strings.Contains(en,"Hosting: Yes")||!strings.Contains(en,"Sources: 3/4")||!strings.Contains(en,"GeoIP mismatch: Region") {t.Errorf("en: %s",en)}
  if strings.Contains(zh,"Difference/issue") {t.Errorf("old warning label: %s",zh)}
+}
+
+func TestIPScopes(t *testing.T) {
+ cases:=[]struct{ip,scope string}{
+  {"192.168.1.1","private"},{"10.0.0.2","private"},{"172.16.2.1","private"},
+  {"100.64.1.1","shared"},{"127.0.0.1","loopback"},
+  {"169.254.5.1","linklocal"},{"::1","loopback"},
+  {"fe80::1","linklocal"},{"fc00::1","private"},
+  {"192.0.2.1","documentation"},{"198.51.100.5","documentation"},{"203.0.113.1","documentation"},
+  {"2001:db8::1","documentation"},{"198.18.1.1","benchmark"},
+  {"8.8.8.8","public"},{"2606:4700:4700::1111","public"},
+ }
+ for _,tc:=range cases {
+  got:=ipScope(net.ParseIP(tc.ip))
+  if got!=tc.scope {t.Errorf("%s got %q want %q",tc.ip,got,tc.scope)}
+ }
+}
+func TestLocalIPSkipsRemoteLookups(t *testing.T) {
+ r:=lookup(&http.Client{}, "192.168.1.1",time.Nanosecond,false)
+ if r.Scope!="private"||len(r.Sources)!=0||len(r.Whois.Servers)!=0 {t.Fatalf("unexpected external source: %+v",r)}
+ if !strings.Contains(compactLine(r,false,"zh"),"私有内网 IP") {t.Fatalf("unexpected compact: %s",compactLine(r,false,"zh"))}
+ if strings.Contains(compactLine(r,false,"zh"),"WHOIS:") {t.Fatal("should not claim WHOIS on private addresses")}
+}
+func TestLinuxDefaultRouteParser(t *testing.T) {
+ table:="Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT\n"+
+  "eth0 00000000 0101A8C0 0003 0 0 10 00000000 0 0 0\n"+
+  "wlan0 00000000 0102000A 0003 0 0 30 00000000 0 0 0\n"
+ got:=parseLinuxRoute(table)
+ if got.Gateway!="192.168.1.1"||got.Interface!="eth0" {t.Fatalf("unexpected route: %+v",got)}
+}
+func TestRouteGetParser(t *testing.T) {
+ r:=parseRouteGet("route to: default\ngateway: 192.168.0.254\ninterface: en0\n","IPv4")
+ if r.Gateway!="192.168.0.254"||r.Interface!="en0" {t.Fatalf("unexpected route: %+v",r)}
 }
