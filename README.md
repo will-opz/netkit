@@ -54,6 +54,8 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit diagnose example.com                # 统一 DNS/TCP/TLS/HTTP 本地证据
 ./netkit diagnose --output json https://example.com # AI-ready 结构化证据
 ./netkit diagnose -ai example.com            # 可选 AI 综合解释（需配置模型 API）
+./netkit config init                         # 初始化本地非敏感配置
+./netkit config ai-key set                   # macOS Keychain 交互式保存密钥
 ./netkit tcp -all-ips example.com 443        # 逐个检测所有 A/AAAA 地址
 ./netkit tcp --output json 127.0.0.1 5432    # 本地服务 TCP JSON
 ./netkit dns list --output json              # 公共 DNS 清单 JSON
@@ -86,6 +88,44 @@ cat ips.txt | ./netkit ip -stdin -workers 2 -interval 2s # 请求节流
 ```
 
 `--output` accepts `text` (default) or `json`; the original `-json` flag is kept as an alias. `netkit --output json` works without an explicit `ip` subcommand. JSON keys remain English regardless of `-lang`. An unsupported format returns a nonzero exit status.\n\nNote: Go's standard `flag` parser expects options before IP arguments (e.g. `netkit ip -all 1.1.1.1`).
+
+## Local AI configuration and macOS Keychain
+
+**Local settings:** `~/.config/netkit/config.json` (created only by `netkit config init`). It contains **no API key**; it holds the API base URL, model, timeout and Keychain item identifiers.
+
+```sh
+git pull --ff-only && make build
+./netkit config init              # creates a 0600 config, never overwrites
+./netkit config show              # reports config metadata, never a secret
+./netkit config ai-key set        # macOS: securely prompts for the API Key
+./netkit config ai-key status     # only present / not found; never reveals key
+./netkit diagnose -ai example.com
+# To delete only this NetKit Keychain item:
+./netkit config ai-key delete
+```
+
+Edit the generated JSON using a local editor. Set `ai.model` to your actual OpenAI model identifier; `ai.base_url` defaults to `https://api.openai.com/v1` and `ai.timeout` to `30s`. The default credential has `service: "netkit.ai"`, `account: "openai"`, and `source: "keychain"` on macOS (`"env"` on other platforms):
+
+```json
+{
+  "ai": {
+    "base_url": "https://api.openai.com/v1",
+    "model": "<your-model-id>",
+    "timeout": "30s",
+    "credential": {
+      "source": "keychain",
+      "service": "netkit.ai",
+      "account": "openai"
+    }
+  }
+}
+```
+
+The value is read via macOS `/usr/bin/security find-generic-password -w` into process memory. The `set` operation invokes `security add-generic-password ... -U -w` **without a password argument**, so macOS prompts on the terminal rather than exposing the value in the process command line. An interactive macOS login Keychain session is required to create/read the item; SSH, headless services and CI should use environment-based injection instead. The `security` CLI itself is the macOS Keychain access-control identity, not a signed NetKit app identity; don't treat this implementation as application-isolated credential protection.
+
+**Precedence:** explicit `NETKIT_AI_BASE_URL`, `NETKIT_AI_MODEL`, `NETKIT_AI_TIMEOUT` override config settings; an explicitly provided `NETKIT_AI_API_KEY` overrides Keychain without reading it. For local loopback Ollama, NetKit does not read the Keychain if no key is provided. An absent/unavailable credential produces a sanitized `ai_error` without affecting the underlying DNS/TCP/TLS/HTTP outcome.
+
+Avoid saving real keys in `~/.zshrc`, `config.json`, clipboard logs, or command arguments. The `netkit config ai-key set` and `delete` commands **mutate your local Keychain**, while `status` and `show` never print its secret value. No Keychain action occurs automatically during build or tests.
 
 ## Optional AI analysis (A1 OpenAI-compatible API)
 
