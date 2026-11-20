@@ -24,6 +24,7 @@ type DNSCompareReport struct {
  Domain string `json:"domain"`
  Resolvers []DNSResolverResult `json:"resolvers"`
  Different bool `json:"different"`
+ Detail *DNSCompareDetail `json:"detail,omitempty"`
 }
 
 func newDNSResolver(server string)*net.Resolver {
@@ -94,10 +95,15 @@ func compareDNSResolvers(domain string,timeout time.Duration)DNSCompareReport {
  }
  return DNSCompareReport{Domain:domain,Resolvers:entries,Different:different}
 }
-func runDNSCompare(name string,timeout time.Duration,format,lang string)error {
+func runDNSCompare(name string,timeout time.Duration,format,lang string,details bool,recordType string)error {
  if !validDomain(name) {return fmt.Errorf("invalid domain %q",name)}
  if timeout<=0{return fmt.Errorf("timeout must be positive")}
  report:=compareDNSResolvers(strings.TrimSuffix(strings.ToLower(name),"."),timeout)
+ if details{
+  recordType=strings.ToUpper(strings.TrimSpace(recordType))
+  if _,ok:=supportedDNSTypes[recordType];!ok{return fmt.Errorf("unsupported DNS record type %q",recordType)}
+  addDNSCompareDetail(&report,report.Domain,recordType,timeout)
+ }
  if format=="json" {
   b,err:=json.MarshalIndent(report,"","  ")
   if err!=nil{return err}
@@ -116,6 +122,7 @@ func runDNSCompare(name string,timeout time.Duration,format,lang string)error {
   if res.CNAME!=""{fmt.Println("    CNAME ",res.CNAME)}
   if res.Error!=""{fmt.Println("    Error ",res.Error)}
  }
+ if report.Detail!=nil {fmt.Print(formatDNSCompareDetail(*report.Detail,lang))}
  if report.Different{
   if lang=="en"{fmt.Println("A/AAAA responses differ (this can be normal for CDN/GeoDNS).")
   }else{fmt.Println("A/AAAA 结果存在差异（CDN/GeoDNS 场景可能是正常现象）。")}
