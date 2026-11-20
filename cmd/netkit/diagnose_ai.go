@@ -113,7 +113,7 @@ func analyzeWithAI(ctx context.Context,b EvidenceBundle,settings AISettings,clie
  if settings.Timeout<=0||settings.Timeout>120*time.Second{return nil,errors.New("invalid AI timeout")}
  endpoint,loopback,err:=aiEndpoint(settings.BaseURL)
  if err!=nil{return nil,err}
- if privateAITarget(b)&&!settings.AllowPrivate{return nil,errors.New("private target: add -ai-allow-private to authorize sending evidence")}
+ if !loopback&&privateAITarget(b)&&!settings.AllowPrivate{return nil,errors.New("private target: add -ai-allow-private to authorize sending evidence to remote AI")}
  if !loopback&&settings.APIKey==""{return nil,errors.New("NETKIT_AI_API_KEY is required for remote AI")}
  evidence,err:=json.Marshal(evidenceForAI(b))
  if err!=nil{return nil,err}
