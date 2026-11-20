@@ -56,4 +56,4 @@ Development changes and passing CI do **not** update `will-opz/homebrew-tap`. On
 - [x] Review OpsKitPro architecture, diagnostics and DNS/security implementations.
 - [x] P0.1 TLS command (first implementation: handshake, trust, dates, ALPN, JSON and local tests; continue refining based on field feedback).
 - [x] P0.2 HTTP redirect chain (standalone command, bounded hops, per-hop status/location/duration, error categories and offline tests).
-- [ ] P0.3 TCP reachability.
+- [x] P0.3 TCP reachability (local DNS/TCP probes, IPv4/IPv6, resolved-IP fallback, bounded timeout, JSON and offline tests).
