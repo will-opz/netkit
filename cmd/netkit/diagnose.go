@@ -247,10 +247,7 @@ func runDiagnose(args []string)error{
   }else{fmt.Printf("Result: %s",result.Status)}
   if result.FirstFailure!=""{fmt.Printf(" | First failure: %s",result.FirstFailure)}
   fmt.Println()
-  if result.AIAnalysis!=nil{
-   fmt.Printf("AI [%s]: %s\n",result.AIAnalysis.Model,result.AIAnalysis.Summary)
-   for _,check:=range result.AIAnalysis.NextChecks{fmt.Printf("  - %s\n",check)}
-  }
+  if result.AIAnalysis!=nil{fmt.Print(formatAIAnalysis(*result.AIAnalysis,*lang))}
   if result.AIError!=""{fmt.Printf("AI unavailable: %s\n",result.AIError)}
  }
  if result.Status=="failed"{return fmt.Errorf("diagnose: %s",result.FirstFailure)}
