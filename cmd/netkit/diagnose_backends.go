@@ -39,8 +39,14 @@ type PinnedBackendReport struct {
  Checked int `json:"checked"`
  TotalResolved int `json:"total_resolved"`
  Truncated bool `json:"truncated,omitempty"`
- SuccessCount int `json:"success_count"`
+ SuccessCount int `json:"success_count"` // legacy: first-hop response, including redirect/restricted
  FailureCount int `json:"failure_count"`
+ OKCount int `json:"ok_count"`
+ RedirectCount int `json:"redirect_count"`
+ RestrictedCount int `json:"restricted_count"`
+ HTTPErrorCount int `json:"http_error_count"`
+ TransportErrorCount int `json:"transport_error_count"`
+ Assessment string `json:"assessment"`
 }
 
 // pinnedBackendProbe does not use the system proxy. The only remote TCP
@@ -165,13 +171,42 @@ func probePinnedBackends(ctx context.Context,plan DiagnosticPlan,ips []string,ti
   if ctx.Err()!=nil{break}
  }
  out.Checked=len(out.Results)
- switch{
- case out.Checked==0:out.Status="not_checked"
- case out.FailureCount>0&&out.SuccessCount>0:out.Status="partial_failure"
- case out.FailureCount>0:out.Status="failed"
- case out.Truncated||out.Checked<out.TotalResolved:out.Status="incomplete"
- default:out.Status="reachable"
- }
+ classifyPinnedBackendReport(&out)
  return out
 }
 
+
+func classifyPinnedBackendReport(r *PinnedBackendReport){
+ r.OKCount=0
+ r.RedirectCount=0
+ r.RestrictedCount=0
+ r.HTTPErrorCount=0
+ r.TransportErrorCount=0
+ for _,p:=range r.Results{
+  switch p.Status{
+  case "ok":r.OKCount++
+  case "redirect":r.RedirectCount++
+  case "restricted":r.RestrictedCount++
+  case "http_error":r.HTTPErrorCount++
+  default:r.TransportErrorCount++
+  }
+ }
+ // Assessment describes exactly what was observed, not full-site health.
+ switch{
+ case r.Checked==0:r.Status="not_checked";r.Assessment="no_backend_checked"
+ case r.FailureCount>0&&r.SuccessCount>0:
+  r.Status="partial_failure";r.Assessment="mixed_first_hop_success_and_failure"
+ case r.FailureCount>0:
+  r.Status="failed";r.Assessment="all_checked_first_hops_failed"
+ case r.Truncated||r.Checked<r.TotalResolved:
+  r.Status="incomplete";r.Assessment="incomplete_backend_coverage"
+ case r.OKCount==r.Checked:
+  r.Status="reachable";r.Assessment="all_checked_first_hops_http_2xx"
+ case r.RedirectCount==r.Checked:
+  r.Status="redirect_only";r.Assessment="all_checked_first_hops_redirect_unfollowed"
+ case r.RestrictedCount==r.Checked:
+  r.Status="restricted_only";r.Assessment="all_checked_first_hops_access_restricted"
+ default:
+  r.Status="mixed_responses";r.Assessment="mixed_first_hop_http_responses"
+ }
+}
