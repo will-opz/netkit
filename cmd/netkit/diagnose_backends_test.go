@@ -2,6 +2,7 @@ package main
 
 import (
  "context"
+ "encoding/json"
  "crypto/x509"
  "net"
  "net/http"
@@ -91,4 +92,29 @@ func TestPinnedBackendsBoundedAndNoRedirectFollowing(t *testing.T){
   t.Fatalf("missing probe bound: %+v",report)
  }
  if calls.Load()!=1{t.Fatalf("redirect or unexpected IP was contacted: %d",calls.Load())}
+}
+
+func TestAIBackendSummaryRedactsIPAndSupportsCitations(t *testing.T){
+ bundle:=aiFixtureBundle()
+ bundle.Backends=&PinnedBackendReport{
+  Status:"partial_failure",TotalResolved:2,Checked:2,SuccessCount:1,FailureCount:1,
+  Results:[]PinnedBackendProbe{
+   {ID:"backend.1",IP:"192.0.2.1",ConnectedIP:"192.0.2.1",Status:"redirect",HTTPStatusCode:301,RedirectHost:"internal.secrets.example"},
+   {ID:"backend.2",IP:"192.0.2.2",ConnectedIP:"192.0.2.2",Status:"tcp_error",ErrorCode:"tcp_connect_failed"},
+  },
+ }
+ projection:=evidenceForAI(bundle)
+ raw,err:=json.Marshal(projection)
+ if err!=nil{t.Fatal(err)}
+ for _,forbidden:=range []string{"192.0.2.1","192.0.2.2","internal.secrets.example"}{
+  if strings.Contains(string(raw),forbidden){t.Fatalf("sensitive backend detail leaked: %s",forbidden)}
+ }
+ if projection.Backends==nil||projection.Backends.Status!="partial_failure"||len(projection.Backends.Results)!=2{
+  t.Fatalf("backend evidence missing: %+v",projection)
+ }
+ analysis:=AIAnalysis{Summary:"one backend failed",EvidenceIDs:[]string{"backend.1","backend.2"},
+  Hypotheses:[]AIHypothesis{{Cause:"IP-specific connection failure",Confidence:"medium",EvidenceIDs:[]string{"backend.2"}}}}
+ if err:=validateAIAnalysis(analysis,bundle);err!=nil{t.Fatalf("valid backend references rejected: %v",err)}
+ analysis.EvidenceIDs=[]string{"backend.999"}
+ if err:=validateAIAnalysis(analysis,bundle);err==nil{t.Fatal("fabricated backend ID accepted")}
 }
