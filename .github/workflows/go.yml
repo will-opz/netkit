@@ -58,6 +58,8 @@ jobs:
           /tmp/netkit http -h
           /tmp/netkit tcp -h
           /tmp/netkit diagnose -h
+          if /tmp/netkit diagnose -all-ips --output json http://127.0.0.1:1/ > /tmp/netkit-pinned.json 2>/dev/null; then exit 1; fi
+          python3 -c 'import json; r=json.load(open("/tmp/netkit-pinned.json")); assert r["backends"]["checked"]==1 and r["backends"]["results"][0]["ip"]=="127.0.0.1"'
           /tmp/netkit config --help
           export NETKIT_TEST_HOME="$(mktemp -d)"
           HOME="$NETKIT_TEST_HOME" /tmp/netkit config init
