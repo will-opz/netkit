@@ -257,5 +257,15 @@ No tagged release or Homebrew Tap update is permitted for this development miles
 - [x] A response-only backend is no longer automatically labeled `reachable`: `redirect_only`, `restricted_only` and `mixed_responses` distinguish observed first-hop behavior. Keep legacy `success_count` for JSON compatibility, but document that it includes redirects/restrictions.
 - [x] AI evidence projection includes sanitized counts and first-hop assessment so model cannot conflate 301/302 with redirected destination success, or 403/429 with full application health.
 - [x] Offline deterministic classification tests cover successful 2xx, 3xx-only, restricted-only, mixed response, partial failure, all failures and truncated coverage. Per-node real CDN observations remain local to the user's Mac; external CDN behavior is not claimed from CI fixtures.
-- [ ] If real CDN testing reveals protocol differences or proxy dependence, record effective HTTP protocol, ALPN and proxy routing as explicit evidence, without claiming all observed endpoints are interchangeable.
+- [x] Add per-IP effective HTTP protocol, negotiated TLS ALPN/version and explicit `direct_pinned_no_proxy` route evidence; allow HTTP/2 negotiation rather than forcing HTTP/1.1. Offline HTTP/1.1 and HTTP/2 test servers verify observed results.
+- [ ] Compare real CDN responses on the user's Mac and investigate proxy-dependent differences; do not infer every backend has the same protocol or routing policy.
 
+
+### Pinned-node protocol observability (2026-11-21)
+
+- [x] Add optional `http_protocol`, `tls_alpn` and `tls_version` on `backends.results[]` as actual observed values, not inferred capabilities.
+- [x] Report per-node `connection_mode: direct_pinned_no_proxy` to distinguish it from default `http` and browser requests that may use proxies.
+- [x] Enable HTTP/2 ALPN negotiation in the per-IP transport without weakening hostname or CA verification and without following redirects; preserve original Host and SNI.
+- [x] Pass only allowlisted HTTP protocol/ALPN tokens and the known connection mode to AI, rather than arbitrary server-supplied values.
+- [x] Use local HTTP/1.1, TLS HTTP/1.1 and HTTP/2 test servers for offline protocol assertions, including redaction checks.
+- [ ] Capture real CDN per-IP protocol distributions at the user's observer location (results may vary with time/network); compare to browser/proxy behavior when supported by actual evidence.
