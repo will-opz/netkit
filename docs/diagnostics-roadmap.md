@@ -240,3 +240,13 @@ No tagged release or Homebrew Tap update is permitted for this development miles
 - [x] Add **20 synthetic, offline evidence-regression cases** covering DNS, TCP, TLS, HTTP status, redirects and skipped stages, plus separate confidence/citation/CLI-format assertions. These are **not** 20 scored live-model evaluations.
 - [ ] Run a separate human-reviewed labeled model-quality evaluation for at least 20–30 real or controlled fault samples with an authorized model; classify unsupported causal claims, accuracy of action recommendations and citations. API cost and network dependencies exclude this from routine CI.
 
+
+
+### Pinned backend diagnostic follow-up (2026-11-21)
+
+- [x] Optional `netkit diagnose -all-ips HOST` makes one single-hop HTTP(S) GET per resolved IP, maximum 8 unique addresses; each request uses a new no-proxy transport, pinned `DialContext`, original HTTP Host, original TLS SNI and full system-root hostname verification.
+- [x] Record selected IP, real TCP peer IP, HTTP status, redirect hostname (without following), qualitative TLS/transport error, duration, and stable `backend.N` ID. A 301/302 denotes a *successful first-hop response*, **not** a proven successful redirected application.
+- [x] JSON `backends` is additive and independent of the original diagnosis `status`/`first_failure`; incomplete/truncated coverage is explicit. Do not claim every CDN/backend address is good based on one default connection.
+- [x] Optional AI receives sanitized per-backend status and evidence IDs, never the raw backend IP or redirect URL. Additional local test fixtures cover Host preservation, pinned peer, untrusted/hostname-mismatched TLS, partial failure, redirect containment and eight-address limit.
+- [ ] Future: an explicitly scoped follow-redirect tracer that validates each new hostname/IP independently, without misattributing multi-host redirect outcomes to the original pinned backend.
+
