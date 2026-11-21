@@ -165,3 +165,60 @@ func TestAIBackendSummaryIncludesAssessmentNotJustStatus(t *testing.T){
   t.Fatalf("AI may misinterpret redirect as success: %+v",ai.Backends)
  }
 }
+
+func TestPinnedHTTPProtocolAndDirectRoute(t *testing.T){
+ server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.Proto!="HTTP/1.1"{t.Errorf("unexpected server HTTP proto: %s",r.Proto)}
+  w.WriteHeader(200)
+ }))
+ defer server.Close()
+ port,_:=strconv.Atoi(strings.TrimPrefix(server.URL,"http://127.0.0.1:"))
+ result:=pinnedBackendProbe(context.Background(),DiagnosticPlan{Host:"example.com",Port:port,Scheme:"http"},"127.0.0.1")
+ if result.Status!="ok"||result.HTTPProtocol!="HTTP/1.1"||result.TLSALPN!=""||
+  result.ConnectionMode!="direct_pinned_no_proxy"||result.ConnectedIP!="127.0.0.1"{
+  t.Fatalf("wrong pinned HTTP protocol/route: %+v",result)
+ }
+}
+
+func TestPinnedTLSHTTP2ALPNNegotiation(t *testing.T){
+ server:=httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if r.ProtoMajor!=2{t.Errorf("expected actual HTTP/2 request, got %s",r.Proto)}
+  w.WriteHeader(200)
+ }))
+ server.EnableHTTP2=true
+ server.StartTLS()
+ defer server.Close()
+ port,_:=strconv.Atoi(strings.TrimPrefix(server.URL,"https://127.0.0.1:"))
+ roots:=x509.NewCertPool()
+ roots.AddCert(server.Certificate())
+ result:=pinnedBackendProbeWithRoots(context.Background(),DiagnosticPlan{Host:"127.0.0.1",Port:port,Scheme:"https"},"127.0.0.1",roots)
+ if result.Status!="ok"||result.HTTPStatusCode!=200||result.HTTPProtocol!="HTTP/2.0"||
+  result.TLSALPN!="h2"||result.TLSVersion==""||
+  result.TLSVerified==nil||!*result.TLSVerified{
+  t.Fatalf("pinned HTTP/2 ALPN was not negotiated: %+v",result)
+ }
+}
+func TestPinnedTLSSingleHopHTTP11WithoutALPN(t *testing.T){
+ server:=httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){w.WriteHeader(200)}))
+ defer server.Close()
+ port,_:=strconv.Atoi(strings.TrimPrefix(server.URL,"https://127.0.0.1:"))
+ roots:=x509.NewCertPool()
+ roots.AddCert(server.Certificate())
+ result:=pinnedBackendProbeWithRoots(context.Background(),DiagnosticPlan{Host:"127.0.0.1",Port:port,Scheme:"https"},"127.0.0.1",roots)
+ if result.Status!="ok"||result.HTTPProtocol!="HTTP/1.1"||result.TLSALPN=="h2"{
+  t.Fatalf("wrong protocol for HTTP/1.1 TLS server: %+v",result)
+ }
+}
+func TestAIProtocolProjectionAllowlist(t *testing.T){
+ bundle:=aiFixtureBundle()
+ bundle.Backends=&PinnedBackendReport{Status:"reachable",Results:[]PinnedBackendProbe{
+  {ID:"backend.1",Status:"ok",HTTPProtocol:"HTTP/2.0",TLSALPN:"h2",ConnectionMode:"direct_pinned_no_proxy"},
+  {ID:"backend.2",Status:"ok",HTTPProtocol:"\nINJECT",TLSALPN:"do something else",ConnectionMode:"proxy"},
+ }}
+ evidence:=evidenceForAI(bundle)
+ if evidence.Backends==nil||len(evidence.Backends.Results)!=2{t.Fatal("backend projection missing")}
+ if evidence.Backends.Results[0].HTTPProtocol!="HTTP/2.0"||evidence.Backends.Results[0].TLSALPN!="h2"||
+  evidence.Backends.Results[0].ConnectionMode!="direct_pinned_no_proxy"{t.Fatalf("safe protocol dropped: %+v",evidence.Backends.Results[0])}
+ bad:=evidence.Backends.Results[1]
+ if bad.HTTPProtocol!=""||bad.TLSALPN!=""||bad.ConnectionMode!=""{t.Fatalf("untrusted protocol content leaked: %+v",bad)}
+}
