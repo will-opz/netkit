@@ -220,3 +220,13 @@ The Homebrew Tap remains unchanged until a separately approved, verified tagged 
 - [ ] Future: evaluate native Security.framework integration and application-specific Keychain ACL if stronger per-binary isolation is needed; the `security` CLI is the actual access-control identity in the current version.
 
 No tagged release or Homebrew Tap update is permitted for this development milestone.
+
+
+### Keychain long-token correction (2026-11-21)
+
+- [x] Reviewed `netkit config ai-key set`: macOS `security add-generic-password ... -w` prompts interactively but can silently truncate long API keys at 128 characters, matching the observed 128-versus-164-character discrepancy.
+- [x] Replaced the narrow `security -w` prompt with hidden terminal input and `security -i` stdin batch invocation. Password is never placed in argv/shell history or echoed to terminal; only printable non-whitespace ASCII credentials are accepted.
+- [x] Verify exact saved Keychain data by reading it back before printing success. Refuse silently truncated or inaccessible items; suppress secret-bearing command output and backend errors.
+- [x] Add macOS-only long-token, truncation rejection, unsafe-input and quoting regression tests with mocked Keychain operations.
+- [ ] Confirm on an interactive user Mac with a throwaway 164-character test credential before re-saving any live API key. Automated CI does not exercise login Keychain GUI permissions.
+
