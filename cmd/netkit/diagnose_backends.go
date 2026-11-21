@@ -25,6 +25,10 @@ type PinnedBackendProbe struct {
  ID string `json:"id"`
  IP string `json:"ip"`
  ConnectedIP string `json:"connected_ip,omitempty"`
+ ConnectionMode string `json:"connection_mode"`
+ HTTPProtocol string `json:"http_protocol,omitempty"`
+ TLSALPN string `json:"tls_alpn,omitempty"`
+ TLSVersion string `json:"tls_version,omitempty"`
  Status string `json:"status"`
  DurationMS int64 `json:"duration_ms"`
  TLSVerified *bool `json:"tls_verified,omitempty"`
@@ -57,7 +61,7 @@ func pinnedBackendProbe(ctx context.Context,plan DiagnosticPlan,ip string)(out P
 }
 func pinnedBackendProbeWithRoots(ctx context.Context,plan DiagnosticPlan,ip string,roots *x509.CertPool)(out PinnedBackendProbe){
  start:=time.Now()
- out= PinnedBackendProbe{IP:ip,Status:"unknown"}
+ out= PinnedBackendProbe{IP:ip,Status:"unknown",ConnectionMode:"direct_pinned_no_proxy"}
  defer func(){out.DurationMS=time.Since(start).Milliseconds()}()
  parsed:=net.ParseIP(ip)
  if parsed==nil{out.Status="invalid_ip";out.ErrorCode="invalid_ip";return out}
@@ -74,12 +78,20 @@ func pinnedBackendProbeWithRoots(ctx context.Context,plan DiagnosticPlan,ip stri
    }
   },
   TLSHandshakeStart:func(){tlsStarted=true},
-  TLSHandshakeDone:func(_ tls.ConnectionState,err error){if err==nil{tlsSucceeded=true}},
+  TLSHandshakeDone:func(state tls.ConnectionState,err error){
+   if err==nil{
+    tlsSucceeded=true
+    out.TLSVersion=tlsVersionName(state.Version)
+    out.TLSALPN=state.NegotiatedProtocol
+   }
+  },
  }
  transport:=&http.Transport{
   Proxy:nil,
   DisableKeepAlives:true,
-  ForceAttemptHTTP2:false,
+  // HTTP/2 must be negotiated explicitly; forcing HTTP/1.1 would
+  // make real CDN ALPN comparisons misleading.
+  ForceAttemptHTTP2:true,
   TLSClientConfig:&tls.Config{MinVersion:tls.VersionTLS12,RootCAs:roots},
   DialContext:func(ctx context.Context,network,requested string)(net.Conn,error){
    if !strings.EqualFold(requested,destHostPort){
@@ -115,17 +127,20 @@ func pinnedBackendProbeWithRoots(ctx context.Context,plan DiagnosticPlan,ip stri
   }else{
    out.Status="network_error";out.ErrorCode="network_error"
   }
-  if plan.Scheme=="https"{
+  if plan.Scheme=="https"&&(tlsStarted||tlsSucceeded){
    verified:=false
    out.TLSVerified=&verified
   }
   return out
  }
  defer response.Body.Close()
+ out.HTTPProtocol=response.Proto
  if plan.Scheme=="https"{
   verified:=response.TLS!=nil&&len(response.TLS.VerifiedChains)>0
   out.TLSVerified=&verified
   if !verified{out.Status="tls_error";out.ErrorCode="tls_verification_failed";return out}
+  out.TLSVersion=tlsVersionName(response.TLS.Version)
+  out.TLSALPN=response.TLS.NegotiatedProtocol
  }
  out.HTTPStatusCode=response.StatusCode
  out.Status=httpState(response.StatusCode)
