@@ -47,6 +47,9 @@ type PinnedBackendReport struct {
 // destination it can dial is the selected resolved IP and target port.
 // A root-only GET avoids retrieving arbitrary large response bodies.
 func pinnedBackendProbe(ctx context.Context,plan DiagnosticPlan,ip string)(out PinnedBackendProbe){
+ return pinnedBackendProbeWithRoots(ctx,plan,ip,nil)
+}
+func pinnedBackendProbeWithRoots(ctx context.Context,plan DiagnosticPlan,ip string,roots *x509.CertPool)(out PinnedBackendProbe){
  start:=time.Now()
  out= PinnedBackendProbe{IP:ip,Status:"unknown"}
  defer func(){out.DurationMS=time.Since(start).Milliseconds()}()
@@ -71,7 +74,7 @@ func pinnedBackendProbe(ctx context.Context,plan DiagnosticPlan,ip string)(out P
   Proxy:nil,
   DisableKeepAlives:true,
   ForceAttemptHTTP2:false,
-  TLSClientConfig:&tls.Config{MinVersion:tls.VersionTLS12},
+  TLSClientConfig:&tls.Config{MinVersion:tls.VersionTLS12,RootCAs:roots},
   DialContext:func(ctx context.Context,network,requested string)(net.Conn,error){
    if !strings.EqualFold(requested,destHostPort){
     return nil,errors.New("unexpected dial target")
@@ -172,6 +175,3 @@ func probePinnedBackends(ctx context.Context,plan DiagnosticPlan,ips []string,ti
  return out
 }
 
-// compile-time assertions pin references to the certificate errors used by
-// Go's verified TLS transport rather than resorting to InsecureSkipVerify.
-var _ = x509.HostnameError{}
