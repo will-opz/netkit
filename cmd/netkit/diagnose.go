@@ -262,7 +262,8 @@ func runDiagnose(args []string)error{
   if result.Backends!=nil{
    name:="逐 IP 检测"
    if *lang=="en"{name="Pinned IP probes"}
-   fmt.Printf("%s: %s (%d/%d)\n",name,result.Backends.Status,result.Backends.Checked,result.Backends.TotalResolved)
+   fmt.Printf("%s: %s (%d/%d) | 2xx=%d redirects=%d restricted=%d errors=%d\n",name,result.Backends.Status,result.Backends.Checked,result.Backends.TotalResolved,result.Backends.OKCount,result.Backends.RedirectCount,result.Backends.RestrictedCount,result.Backends.FailureCount)
+   fmt.Printf("  %s: %s\n",chooseAIText(*lang,"第一跳评估","First-hop assessment"),result.Backends.Assessment)
    for _,b:=range result.Backends.Results{
     fmt.Printf("  %-10s %-39s %-12s %dms",b.ID,b.IP,b.Status,b.DurationMS)
     if b.HTTPStatusCode!=0{fmt.Printf(" HTTP %d",b.HTTPStatusCode)}
