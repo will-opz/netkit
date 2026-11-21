@@ -55,7 +55,7 @@ func TestPinnedHTTPSRejectsHostnameMismatchEvenTrustedCA(t *testing.T){
  }))
  defer server.Close()
  port,_:=strconv.Atoi(strings.TrimPrefix(server.URL,"https://127.0.0.1:"))
- plan:=DiagnosticPlan{Host:"wrong.example.com",Port:port,Scheme:"https"}
+ plan:=DiagnosticPlan{Host:"definitely-not-a-certificate-name.invalid",Port:port,Scheme:"https"}
  roots:=x509.NewCertPool()
  roots.AddCert(server.Certificate())
  got:=pinnedBackendProbeWithRoots(context.Background(),plan,"127.0.0.1",roots)
