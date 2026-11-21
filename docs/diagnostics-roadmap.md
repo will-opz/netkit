@@ -250,3 +250,12 @@ No tagged release or Homebrew Tap update is permitted for this development miles
 - [x] Optional AI receives sanitized per-backend status and evidence IDs, never the raw backend IP or redirect URL. Additional local test fixtures cover Host preservation, pinned peer, untrusted/hostname-mismatched TLS, partial failure, redirect containment and eight-address limit.
 - [ ] Future: an explicitly scoped follow-redirect tracer that validates each new hostname/IP independently, without misattributing multi-host redirect outcomes to the original pinned backend.
 
+
+### CDN pinned-node first-hop classification (2026-11-21)
+
+- [x] Audit and split pinned node HTTP outcomes: direct 2xx, redirects, restricted 403/429, HTTP errors and transport/TLS errors. Expose `ok_count`, `redirect_count`, `restricted_count`, `http_error_count`, `transport_error_count` and a stable `assessment`.
+- [x] A response-only backend is no longer automatically labeled `reachable`: `redirect_only`, `restricted_only` and `mixed_responses` distinguish observed first-hop behavior. Keep legacy `success_count` for JSON compatibility, but document that it includes redirects/restrictions.
+- [x] AI evidence projection includes sanitized counts and first-hop assessment so model cannot conflate 301/302 with redirected destination success, or 403/429 with full application health.
+- [x] Offline deterministic classification tests cover successful 2xx, 3xx-only, restricted-only, mixed response, partial failure, all failures and truncated coverage. Per-node real CDN observations remain local to the user's Mac; external CDN behavior is not claimed from CI fixtures.
+- [ ] If real CDN testing reveals protocol differences or proxy dependence, record effective HTTP protocol, ALPN and proxy routing as explicit evidence, without claiming all observed endpoints are interchangeable.
+
