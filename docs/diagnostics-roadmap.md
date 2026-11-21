@@ -230,3 +230,13 @@ No tagged release or Homebrew Tap update is permitted for this development miles
 - [x] Add macOS-only long-token, truncation rejection, unsafe-input and quoting regression tests with mocked Keychain operations.
 - [ ] Confirm on an interactive user Mac with a throwaway 164-character test credential before re-saving any live API key. Automated CI does not exercise login Keychain GUI permissions.
 
+
+
+### AI report quality pass (2026-11-21)
+
+- [x] Text reports display AI hypotheses, qualitative low/medium/high confidence, exact evidence IDs and next checks; raw deterministic status is unchanged. A skipped stage cannot independently support a hypothesis, and the summary needs at least one observed source.
+- [x] Pass allowlisted per-stage duration and HTTP status/redirect/downgrade fields to the model, without exposing raw URLs/query strings, IP addresses, certificate subjects or token-bearing errors.
+- [x] Strengthen model instructions: a DNS resolver result is not a raw RCODE; an HTTP 403/429 means restricted access, not proof of an origin outage; skipped tests do not prove failure; single-observer success does not prove global availability; multi-IP probes may touch different backends.
+- [x] Add **20 synthetic, offline evidence-regression cases** covering DNS, TCP, TLS, HTTP status, redirects and skipped stages, plus separate confidence/citation/CLI-format assertions. These are **not** 20 scored live-model evaluations.
+- [ ] Run a separate human-reviewed labeled model-quality evaluation for at least 20–30 real or controlled fault samples with an authorized model; classify unsupported causal claims, accuracy of action recommendations and citations. API cost and network dependencies exclude this from routine CI.
+
