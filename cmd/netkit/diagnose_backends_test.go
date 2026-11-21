@@ -118,3 +118,50 @@ func TestAIBackendSummaryRedactsIPAndSupportsCitations(t *testing.T){
  analysis.EvidenceIDs=[]string{"backend.999"}
  if err:=validateAIAnalysis(analysis,bundle);err==nil{t.Fatal("fabricated backend ID accepted")}
 }
+
+func TestPinnedBackendAssessmentDoesNotTreatRedirectOr403AsHealthy(t *testing.T){
+ tests:=[]struct{
+  name string
+  statuses []string
+  wantStatus string
+  wantAssessment string
+  ok,redirect,restricted,failed int
+ }{
+  {"direct_2xx",[]string{"ok","ok"},"reachable","all_checked_first_hops_http_2xx",2,0,0,0},
+  {"redirect_only",[]string{"redirect","redirect"},"redirect_only","all_checked_first_hops_redirect_unfollowed",0,2,0,0},
+  {"access_restricted",[]string{"restricted","restricted"},"restricted_only","all_checked_first_hops_access_restricted",0,0,2,0},
+  {"mixed_first_hops",[]string{"ok","redirect","restricted"},"mixed_responses","mixed_first_hop_http_responses",1,1,1,0},
+  {"partial_failure",[]string{"ok","tcp_error"},"partial_failure","mixed_first_hop_success_and_failure",1,0,0,1},
+  {"failed",[]string{"tls_error","http_error"},"failed","all_checked_first_hops_failed",0,0,0,2},
+ }
+ for _,tc:=range tests{
+  t.Run(tc.name,func(t *testing.T){
+   r:=PinnedBackendReport{Results:[]PinnedBackendProbe{},Checked:len(tc.statuses),TotalResolved:len(tc.statuses)}
+   for _,status:=range tc.statuses{
+    r.Results=append(r.Results,PinnedBackendProbe{Status:status})
+    if status=="ok"||status=="redirect"||status=="restricted"{r.SuccessCount++}else{r.FailureCount++}
+   }
+   classifyPinnedBackendReport(&r)
+   if r.Status!=tc.wantStatus||r.Assessment!=tc.wantAssessment||r.OKCount!=tc.ok||
+    r.RedirectCount!=tc.redirect||r.RestrictedCount!=tc.restricted||r.FailureCount!=tc.failed{
+    t.Fatalf("misclassified: %+v",r)
+   }
+  })
+ }
+}
+func TestPinnedBackendIncompleteCoverageIsNotHealthy(t *testing.T){
+ r:=PinnedBackendReport{TotalResolved:10,Checked:8,SuccessCount:8,Truncated:true}
+ for i:=0;i<8;i++{r.Results=append(r.Results,PinnedBackendProbe{Status:"ok"})}
+ classifyPinnedBackendReport(&r)
+ if r.Status!="incomplete"||r.Assessment!="incomplete_backend_coverage"||r.OKCount!=8{t.Fatalf("misreported coverage: %+v",r)}
+}
+func TestAIBackendSummaryIncludesAssessmentNotJustStatus(t *testing.T){
+ b:=aiFixtureBundle()
+ b.Backends=&PinnedBackendReport{Status:"redirect_only",Assessment:"all_checked_first_hops_redirect_unfollowed",
+  Checked:2,TotalResolved:2,RedirectCount:2,SuccessCount:2,
+  Results:[]PinnedBackendProbe{{ID:"backend.1",Status:"redirect",HTTPStatusCode:301},{ID:"backend.2",Status:"redirect",HTTPStatusCode:302}}}
+ ai:=evidenceForAI(b)
+ if ai.Backends==nil||ai.Backends.RedirectCount!=2||ai.Backends.OKCount!=0||ai.Backends.Assessment!=b.Backends.Assessment{
+  t.Fatalf("AI may misinterpret redirect as success: %+v",ai.Backends)
+ }
+}
