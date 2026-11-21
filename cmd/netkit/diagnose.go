@@ -267,6 +267,8 @@ func runDiagnose(args []string)error{
    for _,b:=range result.Backends.Results{
     fmt.Printf("  %-10s %-39s %-12s %dms",b.ID,b.IP,b.Status,b.DurationMS)
     if b.HTTPStatusCode!=0{fmt.Printf(" HTTP %d",b.HTTPStatusCode)}
+    if b.HTTPProtocol!=""{fmt.Printf(" proto=%s",b.HTTPProtocol)}
+    if b.TLSALPN!=""{fmt.Printf(" alpn=%s",b.TLSALPN)}
     if b.RedirectHost!=""{fmt.Printf(" redirect_host=%s",b.RedirectHost)}
     if b.ErrorCode!=""{fmt.Printf(" %s",b.ErrorCode)}
     fmt.Println()
