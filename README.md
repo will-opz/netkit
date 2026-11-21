@@ -54,6 +54,7 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit diagnose example.com                # 统一 DNS/TCP/TLS/HTTP 本地证据
 ./netkit diagnose --output json https://example.com # AI-ready 结构化证据
 ./netkit diagnose -ai example.com            # 可选 AI 综合解释（需配置模型 API）
+./netkit diagnose -all-ips -ai baidu.com     # 按解析 IP 逐个检查 HTTPS 和证书
 ./netkit config init                         # 初始化本地非敏感配置
 ./netkit config ai-key set                   # macOS Keychain 交互式保存密钥
 ./netkit tcp -all-ips example.com 443        # 逐个检测所有 A/AAAA 地址
@@ -155,6 +156,22 @@ Other OpenAI-compatible providers and NewAPI gateways are selected only by chang
 **Privacy gate:** raw network errors, response headers, URLs/queries, DNS TXT, token-bearing fields and certificate subjects are omitted from the AI payload. The target hostname and summarized stage statuses are included, so using an external model still reveals the destination. For private/internal targets or private resolved IPs, remote AI analysis requires an explicit `-ai-allow-private` flag. Loopback local AI servers do not require that remote-data approval. Never pass confidential infrastructure to an untrusted provider.
 
 The model must return JSON with `summary`, `evidence_ids`, `hypotheses` and `next_checks`. NetKit validates field bounds, recognized confidence values, and whether referenced evidence IDs exist. **A hypothesis cannot cite a skipped stage**, and the overall summary must cite at least one observed stage. The text report now shows summary evidence IDs, each possible cause, its model-reported low/medium/high confidence and supporting stage IDs, followed by proposed checks. Confidence is qualitative model judgment, **not a probability or confirmed root cause**. Sanitized AI input includes stage durations, redirect counts and HTTP status codes without raw URLs, headers or IP addresses. It does not trust model-generated network measurements or allow shell execution. The optional `ai_analysis` is kept separate from deterministic evidence. On timeout, missing key, malformed JSON or invalid citations, only `ai_error` is added; the original diagnostic status and exit behavior remain unchanged.
+
+## Pinned per-IP HTTP(S) checks (opt-in)
+
+`netkit diagnose -all-ips HOST` performs additional **sequential, pinned, single-hop HTTP(S) GET** requests to up to **8 distinct IPs** returned by the same system DNS lookup used by the initial diagnosis. `-timeout` limits each individual IP request; the group has an overall bound of eight times that timeout. The option is **off by default** and never makes additional requests to arbitrary names suggested by AI.
+
+```sh
+./netkit diagnose -all-ips baidu.com
+./netkit diagnose -all-ips --output json baidu.com
+./netkit diagnose -all-ips -ai baidu.com
+```
+
+For each IP the TCP dial targets that exact address (no automatic fallback or re-resolution), while preserving the **original hostname for HTTP Host, TLS SNI and certificate verification**. A fresh transport is used with **no proxy**, to keep the observation tied to the selected IP. The TLS chain must validate normally against the local system roots. The first response's status and redirect **hostname** are captured, but the redirect is **never followed**, because the next hop may be another hostname or backend and should not be misattributed to the pinned IP. No page body is consumed. This is a *single-hop* GET, not proof that the entire redirect chain works through that IP.
+
+The additive `backends` JSON object reports a separate status (`reachable`, `partial_failure`, `failed`, or `incomplete`), `checked`, `total_resolved`, `truncated`, counters and per-IP observations (`backend.1`, etc.). The existing top-level `status` and `first_failure` still describe the original default multi-layer diagnosis; a partial backend failure does **not silently overwrite** that result. In `-ai` mode, only sanitized statuses and codes are sent to the model; raw backend IP addresses and redirect locations are never transmitted.
+
+**Limitations:** Only the DNS addresses observed in this run are tested; a CDN may return other addresses at different times/locations. An intermediate proxy, special HTTP/2-only service or host-specific routing policy can affect results. No complete CDN/global availability claim is made.
 
 ## Deterministic comprehensive diagnosis (A0)
 
