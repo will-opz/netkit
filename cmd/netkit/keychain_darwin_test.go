@@ -4,6 +4,7 @@ package main
 
 import (
  "errors"
+ "strconv"
  "strings"
  "testing"
 )
@@ -51,7 +52,7 @@ func TestSecurityBatchCannotInjectExtraCommands(t *testing.T){
  secret:=`sk-proj-a"\\b`
  cmd,err:=securityBatchCommand("netkit.ai","openai",secret)
  if err!=nil{t.Fatal(err)}
- if strings.Count(cmd,"\n")!=1||!strings.Contains(cmd,`\\"\\\\b`){
+ if strings.Count(cmd,"\n")!=1||!strings.Contains(cmd,strconv.Quote(secret)){
   t.Errorf("unsafe quoting: %q",cmd)
  }
 }
