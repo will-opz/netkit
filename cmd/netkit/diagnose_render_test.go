@@ -103,3 +103,39 @@ func TestTerminalDisplayWidthMultilingual(t *testing.T){
   if displayWidth(line)>60{t.Fatalf("CJK wrapping exceeds width: %q",line)}
  }
 }
+
+func TestCompactVerdictIsDeterministicAndDetailedModePreservesAI(t *testing.T){
+ b:=sampleRenderingBundle()
+ b.AIAnalysis.Summary="VERBATIM_MODEL_TEXT_SHOULD_ONLY_APPEAR_IN_VERBOSE"
+ var compact bytes.Buffer
+ renderDiagnoseText(&compact,b,diagnoseTextOptions{Width:60,Lang:"zh"})
+ if strings.Contains(compact.String(),"VERBATIM_MODEL_TEXT")||!strings.Contains(compact.String(),"2 个 IP 首跳均返回 HTTP 2xx"){
+  t.Fatalf("compact verdict leaks long model output: %s",compact.String())
+ }
+ if strings.Contains(compact.String(),"reachable")||strings.Contains(compact.String(),"2xx=2"){
+  t.Fatalf("compact status not localized: %s",compact.String())
+ }
+ var verbose bytes.Buffer
+ renderDiagnoseText(&verbose,b,diagnoseTextOptions{Width:80,Lang:"zh",Verbose:true})
+ if !strings.Contains(verbose.String(),"VERBATIM_MODEL_TEXT")||!strings.Contains(verbose.String(),"2xx=2"){
+  t.Fatalf("verbose missing original analysis or counters: %s",verbose.String())
+ }
+}
+func TestCompactVerdictDoesNotConflateRedirectWithSuccess(t *testing.T){
+ b:=sampleRenderingBundle()
+ b.Backends.Status="redirect_only"
+ b.Backends.OKCount=0
+ b.Backends.RedirectCount=2
+ for i:=range b.Backends.Results{
+  b.Backends.Results[i].Status="redirect"
+  b.Backends.Results[i].HTTPStatusCode=301
+ }
+ var out bytes.Buffer
+ renderDiagnoseText(&out,b,diagnoseTextOptions{Width:60,Lang:"zh"})
+ if !strings.Contains(out.String(),"仅重定向")||!strings.Contains(out.String(),"尚未验证后续跳转链"){
+  t.Fatalf("misleading compact redirect summary: %s",out.String())
+ }
+}
+func TestFriendlyStatusEnglishUnchanged(t *testing.T){
+ if friendlyBackendStatus("reachable","en")!="reachable"||friendlyDiagnosisStatus("ok","en")!="ok"{t.Fatal("English status compatibility broken")}
+}
