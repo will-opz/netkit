@@ -290,3 +290,17 @@ No tagged release or Homebrew Tap update is permitted for this development miles
 - [x] Add offline regression checks for concise wording, verbose model-text preservation, localization and avoiding an incorrect 2xx conclusion for redirects.
 - [ ] Run a final manual visual review on the user's actual terminal/font and address any misaligned punctuation or width wrapping artifacts.
 
+
+### Temporal diagnostics and targeted repeat (2026-11-22)
+
+- [x] Prefer `netkit diagnose -repeat N -interval 30s DOMAIN` as the principal intermittent-availability workflow: each round independently runs DNS → TCP → TLS → HTTP and records a timestamp, resolved IPs, stage outcome, HTTP status and first failure. Address-set changes are evidence, not themselves outages; DNS answer ordering alone does not count as a change.
+- [x] Preserve the **advanced** `netkit diagnose -all-ips -repeat N DOMAIN` mode for targeted first-hop diagnosis of the current DNS addresses, up to 8 IPs and 10 requests per IP. Initial pinned observations are reused and subsequent probes are round-robin; keep timeouts, sample counts and incomplete coverage explicit.
+- [x] Add version-compatible optional `temporal` and `sampling` JSON branches, and concise/verbose display without changing ordinary `diagnose`, original `backends`, or default one-pass semantics.
+- [x] Calculate min, median, nearest-rank P95 and max only on successful HTTP-response timings; report timeouts/errors separately and label small-sample P95 as descriptive rather than a stable CDN/SLO baseline.
+- [x] Enforce repeat count 1–10, temporal interval 100ms–60s, and overall wall-time caps (10 minutes temporal; 5 minutes each for initial pinned checks and additional samples). Interrupted jobs preserve explicit partial evidence. `-interval` cannot be combined with `-all-ips`.
+- [x] AI obtains one sanitized summary **after** the sampling cycle, with round evidence IDs `round.N`, sampled outcomes, DNS-set change counts and no raw per-round/private IPs; private IPs discovered in later rounds trigger the remote-AI privacy gate.
+- [x] Deterministic tests cover DNS rotation versus reordering, failure/recovery, cancellations, round evidence IDs, sensitive-IP redaction, per-IP stats/percentiles, output widths, and CLI parameter bounds.
+- [ ] Field-test repeated temporal checks on the user's Mac with a CDN-backed site; correlate failures with changed DNS sets only when real evidence supports it.
+- [ ] Future: opt-in automatic follow-up when a specific layer fails, and explicit provenance for which backend IP each individual HTTP request used; avoid treating IP as a physical CDN edge or promising worldwide availability.
+
+No official tag, GitHub Release, Homebrew Tap update or scheduled background monitoring is part of this milestone.
