@@ -191,7 +191,9 @@ func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
  if b.AIAnalysis!=nil{
   a:=b.AIAnalysis
   fmt.Fprintln(w)
-  fmt.Fprintln(w,wrapText("AI · "+a.Model,width,""))
+  heading:="AI · "+a.Model
+  if !opt.Verbose{heading=label("检测摘要 · AI 已分析: ","Diagnostic summary · AI analyzed: ")+a.Model}
+  fmt.Fprintln(w,wrapText(heading,width,""))
   if opt.Verbose{
    fmt.Fprintln(w,wrapText(a.Summary,width,"  "))
   }else{
