@@ -139,3 +139,47 @@ func TestCompactVerdictDoesNotConflateRedirectWithSuccess(t *testing.T){
 func TestFriendlyStatusEnglishUnchanged(t *testing.T){
  if friendlyBackendStatus("reachable","en")!="reachable"||friendlyDiagnosisStatus("ok","en")!="ok"{t.Fatal("English status compatibility broken")}
 }
+
+func TestTemporalCompactAndVerboseWidth(t *testing.T){
+ b:=sampleRenderingBundle()
+ b.Backends=nil
+ b.Temporal=&TemporalSampling{Requested:3,Completed:3,Status:"intermittent_or_failed",HealthyRounds:2,FailedRounds:1,
+  Rounds:[]TemporalRound{
+   {ID:"round.1",Status:"ok",DNSStatus:"ok",TCPStatus:"ok",TLSStatus:"ok",HTTPStatus:"ok",FinalHTTPCode:200,ResolvedIPs:[]string{"192.0.2.1"},ObservedAt:"2026-11-22T00:00:00Z"},
+   {ID:"round.2",Status:"failed",FirstFailure:"tcp.1",DNSStatus:"ok",TCPStatus:"failed",TLSStatus:"skipped",HTTPStatus:"skipped",ResolvedIPs:[]string{"192.0.2.1"},ObservedAt:"2026-11-22T00:00:05Z"},
+   {ID:"round.3",Status:"ok",DNSStatus:"ok",TCPStatus:"ok",TLSStatus:"ok",HTTPStatus:"ok",FinalHTTPCode:200,ResolvedIPs:[]string{"192.0.2.1"},ObservedAt:"2026-11-22T00:00:10Z"},
+  }}
+ for _,width:=range []int{60,80,120}{
+  for _,verbose:=range []bool{false,true}{
+   var out bytes.Buffer
+   renderDiagnoseText(&out,b,diagnoseTextOptions{Width:width,Verbose:verbose,Lang:"zh"})
+   if !strings.Contains(out.String(),"round.2")||!strings.Contains(out.String(),"1 轮失败"){
+    t.Fatalf("temporal failure hidden: %s",out.String())
+   }
+   for _,line:=range strings.Split(strings.TrimSpace(out.String()),"\n"){
+    if n:=displayWidth(line);n>width{t.Fatalf("%d-column output overflow (%d): %q",width,n,line)}
+   }
+  }
+ }
+}
+func TestRepeatedPinnedSamplesCompactAndDetailed(t *testing.T){
+ b:=sampleRenderingBundle()
+ st:=buildSampleStats(b.Backends.Results[0],3)
+ for _,ms:=range []int64{12,18,25}{
+  recordBackendSample(&st,PinnedBackendProbe{Status:"ok",HTTPStatusCode:200,DurationMS:ms})
+ }
+ finalizeSampleStats(&st)
+ b.Sampling=&BackendSampling{Requested:3,TotalPlanned:3,TotalCompleted:3,Nodes:[]BackendSampleStatistics{st}}
+ for _,verbose:=range []bool{false,true}{
+  var out bytes.Buffer
+  renderDiagnoseText(&out,b,diagnoseTextOptions{Width:60,Verbose:verbose,Lang:"zh"})
+  if !strings.Contains(out.String(),"median=18ms")||!strings.Contains(out.String(),"p95=25ms"){
+   t.Fatalf("sampling statistics missing: %s",out.String())
+  }
+  if !verbose&&strings.Contains(out.String(),"#2 "){t.Fatalf("compact includes raw samples: %s",out.String())}
+  if verbose&&!strings.Contains(out.String(),"#2 "){t.Fatalf("verbose raw samples missing: %s",out.String())}
+  for _,line:=range strings.Split(strings.TrimSpace(out.String()),"\n"){
+   if n:=displayWidth(line);n>60{t.Fatalf("output too wide (%d): %q",n,line)}
+  }
+ }
+}
