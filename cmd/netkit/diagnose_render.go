@@ -155,9 +155,29 @@ func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
  width:=opt.Width
  if width<40{width=80}
  label:=func(zh,en string)string{return chooseAIText(opt.Lang,zh,en)}
- state:=friendlyDiagnosisStatus(b.Status,opt.Lang)
+ visualStatus:=b.Status
+ state:=friendlyDiagnosisStatus(visualStatus,opt.Lang)
+ if b.Temporal!=nil{
+  if b.Temporal.FailedRounds>0{
+   visualStatus="failed"
+   state=label("跨时间发现故障","Failures across sampling rounds")
+  }else if b.Temporal.DegradedRounds>0||b.Temporal.Incomplete{
+   visualStatus="degraded"
+   state=label("跨时间检查不完整或受限","Incomplete or restricted temporal checks")
+  }
+ }else if b.Sampling!=nil{
+  anyErrors:=false
+  for _,node:=range b.Sampling.Nodes{if node.Errors>0{anyErrors=true}}
+  if anyErrors{
+   visualStatus="degraded"
+   state=label("逐 IP 采样存在失败","Some pinned IP samples failed")
+  }else if b.Sampling.Incomplete{
+   visualStatus="degraded"
+   state=label("逐 IP 采样不完整","Pinned IP sampling incomplete")
+  }
+ }
  fmt.Fprintln(w,wrapText(label("NetKit · 综合诊断","NetKit · Diagnostic")+" · "+b.Plan.Target,width,""))
- fmt.Fprintf(w,"%s %s\n",statusSymbol(b.Status),coloredStatus(state,opt.Color))
+ fmt.Fprintf(w,"%s %s\n",statusSymbol(visualStatus),coloredStatus(state,opt.Color))
  if opt.Verbose{
   for _,s:=range b.Stages{
    line:=fmt.Sprintf("  %s %-5s %-12s %dms [%s]",statusSymbol(s.Status),strings.ToUpper(s.Layer),s.Status,s.DurationMS,s.ID)
@@ -204,8 +224,9 @@ func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
  if b.Temporal!=nil{
   t:=b.Temporal
   fmt.Fprintln(w)
-  title:=fmt.Sprintf("%s: %d/%d · %s · DNS Δ=%d",
-   label("跨时间诊断","Temporal diagnostics"),t.Completed,t.Requested,t.Status,t.DNSChanges)
+  title:=fmt.Sprintf("%s: %d/%d · %s · %d %s · %d %s · DNS Δ=%d",
+   label("跨时间诊断","Temporal diagnostics"),t.Completed,t.Requested,t.Status,
+   t.HealthyRounds,label("轮正常","healthy rounds"),t.FailedRounds,label("轮失败","failed rounds"),t.DNSChanges)
   fmt.Fprintln(w,wrapText(title,width,""))
   for _,round:=range t.Rounds{
    line:=fmt.Sprintf("  %s %s · DNS IP=%d · HTTP=%d",round.ID,round.Status,len(round.ResolvedIPs),round.FinalHTTPCode)
