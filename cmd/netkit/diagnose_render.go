@@ -82,8 +82,8 @@ func coloredStatus(s string,enabled bool)string{
  if !enabled{return s}
  color:="\x1b[36m"
  switch s{
- case "ok","connected","reachable":color="\x1b[32m"
- case "degraded","restricted","redirect","redirect_only","restricted_only","mixed_responses","incomplete":color="\x1b[33m"
+ case "ok","connected","reachable","正常","全部首跳正常":color="\x1b[32m"
+ case "degraded","restricted","redirect","redirect_only","restricted_only","mixed_responses","incomplete","仅重定向","访问受限","混合响应","检查不完整":color="\x1b[33m"
  case "failed","tcp_error","tls_error","http_error","partial_failure","timeout":color="\x1b[31m"
  case "skipped":color="\x1b[90m"
  }
@@ -97,12 +97,52 @@ func statusSymbol(s string)string{
  default:return "!"
  }
 }
+// Human-readable labels never replace the stable English JSON status codes.
+func friendlyDiagnosisStatus(status,lang string)string{
+ switch status{
+ case "ok":return chooseAIText(lang,"正常","ok")
+ case "degraded":return chooseAIText(lang,"部分受限","degraded")
+ case "failed":return chooseAIText(lang,"失败","failed")
+ default:return status
+ }
+}
+func friendlyBackendStatus(status,lang string)string{
+ if lang=="en"{return status}
+ switch status{
+ case "reachable":return "全部首跳正常"
+ case "redirect_only":return "仅重定向"
+ case "restricted_only":return "访问受限"
+ case "mixed_responses":return "混合响应"
+ case "partial_failure":return "部分失败"
+ case "failed":return "失败"
+ case "incomplete":return "检查不完整"
+ case "not_checked":return "未检查"
+ default:return status
+ }
+}
+// The compact verdict is built only from deterministic evidence, never by
+// heuristically shortening the model's free-form prose.
+func compactDiagnosticVerdict(b EvidenceBundle,lang string)string{
+ label:=func(zh,en string)string{return chooseAIText(lang,zh,en)}
+ if b.Status!="ok"{
+  if b.FirstFailure!=""{return label("本次检测发现异常，首个失败阶段：","A failure was observed at ")+b.FirstFailure}
+  return label("本次检测存在异常或访问限制。","This diagnosis contains a failure or restriction.")
+ }
+ if b.Backends==nil{return label("本机此次综合探测未发现故障。","No failure was observed in this local diagnosis.")}
+ r:=b.Backends
+ if r.Status=="reachable"&&r.OKCount==r.Checked&&r.Checked==r.TotalResolved{
+  return fmt.Sprintf(label("本次未发现故障；%d 个 IP 首跳均返回 HTTP 2xx。","No fault observed; %d IPs returned first-hop HTTP 2xx."),r.Checked)
+ }
+ if r.RedirectCount==r.Checked&&r.Checked>0{return label("各 IP 首跳均返回重定向，尚未验证后续跳转链。","All checked IPs redirect; destination chains remain unverified.")}
+ if r.RestrictedCount==r.Checked&&r.Checked>0{return label("各 IP 首跳均受到访问限制。","All checked IPs returned restricted responses.")}
+ if r.FailureCount>0{return label("部分逐 IP 探测失败，请查看节点详情。","Some per-IP probes failed; inspect node details.")}
+ return label("常规探测正常；逐 IP 结果仍有差异或未覆盖全部地址。","Main probe passed; per-IP outcomes differ or coverage is incomplete.")
+}
 func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
  width:=opt.Width
  if width<40{width=80}
  label:=func(zh,en string)string{return chooseAIText(opt.Lang,zh,en)}
- state:=label("正常","ok")
- if b.Status!="ok"{state=b.Status}
+ state:=friendlyDiagnosisStatus(b.Status,opt.Lang)
  fmt.Fprintln(w,wrapText(label("NetKit · 综合诊断","NetKit · Diagnostic")+" · "+b.Plan.Target,width,""))
  fmt.Fprintf(w,"%s %s\n",statusSymbol(b.Status),coloredStatus(state,opt.Color))
  if opt.Verbose{
@@ -122,9 +162,9 @@ func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
  if b.Backends!=nil{
   r:=b.Backends
   fmt.Fprintln(w)
-  fmt.Fprintln(w,wrapText(fmt.Sprintf("%s: %s · %d/%d · 2xx=%d 3xx=%d restricted=%d errors=%d",
-   label("逐 IP","Pinned IPs"),coloredStatus(r.Status,opt.Color),r.Checked,r.TotalResolved,
-   r.OKCount,r.RedirectCount,r.RestrictedCount,r.FailureCount),width,""))
+  summary:=fmt.Sprintf("%s: %s · %d/%d",label("逐 IP","Pinned IPs"),friendlyBackendStatus(r.Status,opt.Lang),r.Checked,r.TotalResolved)
+  if opt.Verbose{summary+=fmt.Sprintf(" · 2xx=%d 3xx=%d restricted=%d errors=%d",r.OKCount,r.RedirectCount,r.RestrictedCount,r.FailureCount)}
+  fmt.Fprintln(w,wrapText(summary,width,""))
   for _,p:=range r.Results{
    code:=""
    if p.HTTPStatusCode>0{code=fmt.Sprintf("HTTP %d",p.HTTPStatusCode)}
@@ -152,7 +192,11 @@ func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
   a:=b.AIAnalysis
   fmt.Fprintln(w)
   fmt.Fprintln(w,wrapText("AI · "+a.Model,width,""))
-  fmt.Fprintln(w,wrapText(a.Summary,width,"  "))
+  if opt.Verbose{
+   fmt.Fprintln(w,wrapText(a.Summary,width,"  "))
+  }else{
+   fmt.Fprintln(w,wrapText(compactDiagnosticVerdict(b,opt.Lang),width,"  "))
+  }
   for _,h:=range a.Hypotheses{
    text:=label("可能原因: ","Possible cause: ")+h.Cause
    if opt.Verbose{text+=fmt.Sprintf(" (%s · %s)",h.Confidence,strings.Join(h.EvidenceIDs,", "))}
