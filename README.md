@@ -54,7 +54,7 @@ Use `make deploy` to install or upgrade the **published** `will-opz/tap/netkit` 
 ./netkit diagnose example.com                # 统一 DNS/TCP/TLS/HTTP 本地证据
 ./netkit diagnose --output json https://example.com # AI-ready 结构化证据
 ./netkit diagnose -ai example.com            # 可选 AI 综合解释（需配置模型 API）
-./netkit diagnose -all-ips -ai baidu.com     # 按解析 IP 逐个检查 HTTPS 和证书
+./netkit diagnose -all-ips -ai baidu.com\n./netkit diagnose -v -all-ips -ai baidu.com     # 按解析 IP 逐个检查 HTTPS 和证书
 ./netkit config init                         # 初始化本地非敏感配置
 ./netkit config ai-key set                   # macOS Keychain 交互式保存密钥
 ./netkit tcp -all-ips example.com 443        # 逐个检测所有 A/AAAA 地址
@@ -156,6 +156,19 @@ Other OpenAI-compatible providers and NewAPI gateways are selected only by chang
 **Privacy gate:** raw network errors, response headers, URLs/queries, DNS TXT, token-bearing fields and certificate subjects are omitted from the AI payload. The target hostname and summarized stage statuses are included, so using an external model still reveals the destination. For private/internal targets or private resolved IPs, remote AI analysis requires an explicit `-ai-allow-private` flag. Loopback local AI servers do not require that remote-data approval. Never pass confidential infrastructure to an untrusted provider.
 
 The model must return JSON with `summary`, `evidence_ids`, `hypotheses` and `next_checks`. NetKit validates field bounds, recognized confidence values, and whether referenced evidence IDs exist. **A hypothesis cannot cite a skipped stage**, and the overall summary must cite at least one observed stage. The text report now shows summary evidence IDs, each possible cause, its model-reported low/medium/high confidence and supporting stage IDs, followed by proposed checks. Confidence is qualitative model judgment, **not a probability or confirmed root cause**. Sanitized AI input includes stage durations, redirect counts and HTTP status codes without raw URLs, headers or IP addresses. It does not trust model-generated network measurements or allow shell execution. The optional `ai_analysis` is kept separate from deterministic evidence. On timeout, missing key, malformed JSON or invalid citations, only `ai_error` is added; the original diagnostic status and exit behavior remain unchanged.
+
+## Diagnose terminal output modes
+
+NetKit defaults to a concise terminal summary: one compact status line for DNS/TCP/TLS/HTTP, a per-IP result list, and a short AI conclusion. Long AI text wraps to the terminal width; Chinese double-width characters are accounted for. Use `COLUMNS=60`, `COLUMNS=80` or `COLUMNS=120` to override the fallback width for redirected output. On an interactive TTY, statuses use unobtrusive colors unless `NO_COLOR` is set or `TERM=dumb`.
+
+```sh
+./netkit diagnose -all-ips -ai www.baidu.com
+./netkit diagnose -v -all-ips -ai www.baidu.com   # full evidence, ALPN, checks
+NO_COLOR=1 ./netkit diagnose -all-ips www.baidu.com
+./netkit diagnose -all-ips -ai --output json www.baidu.com  # machine-readable unchanged
+```
+
+`-v` changes **only text rendering**, not probes, timeout, AI request or the versioned JSON schema. When a fault exists, compact mode retains the first failure and highlights the first recommended next check. `-v` retains stage evidence IDs, backend IDs, connection mode and full AI suggestions. The AI analysis remains the model's validated output; CLI condensation is not a second AI call and does not change token usage.
 
 ## Pinned per-IP HTTP(S) checks (opt-in)
 
