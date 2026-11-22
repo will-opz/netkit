@@ -240,16 +240,18 @@ func runDiagnose(args []string)error{
  defer cancel()
  result:=diagnose(ctx,plan,*timeout,defaultDiagnosticProbes())
  if *repeats>1&&!*allIPs{
-  temporal:=sampleDomainOverTime(context.Background(),result,*repeats,*interval,*timeout,
+  temporalCtx,stopTemporal:=context.WithTimeout(context.Background(),10*time.Minute)
+  temporal:=sampleDomainOverTime(temporalCtx,result,*repeats,*interval,*timeout,
    func(ctx context.Context,plan DiagnosticPlan,limit time.Duration)EvidenceBundle{
     return diagnose(ctx,plan,limit,defaultDiagnosticProbes())
    })
+  stopTemporal()
   result.Temporal=&temporal
  }
  if *allIPs{
   if len(result.Stages)>0 && result.Stages[0].Status=="ok" && result.Stages[0].DNS!=nil{
    ips:=result.Stages[0].DNS.IPs
-   ipCtx,stop:=context.WithTimeout(context.Background(),time.Duration(maxPinnedIPChecks)*(*timeout))
+   ipCtx,stop:=context.WithTimeout(context.Background(),min(time.Duration(maxPinnedIPChecks)*(*timeout),5*time.Minute))
    backendReport:=probePinnedBackends(ipCtx,plan,ips,*timeout)
    stop()
    result.Backends=&backendReport
@@ -257,7 +259,7 @@ func runDiagnose(args []string)error{
     // First observations are retained and reused; only (repeat-1)*IPs
     // additional GETs are issued, with bounded total runtime and requests.
     samplingCtx,stopSamples:=context.WithTimeout(context.Background(),
-     time.Duration(maxPinnedIPChecks*(*repeats-1))*(*timeout))
+     min(time.Duration(maxPinnedIPChecks*(*repeats-1))*(*timeout),5*time.Minute))
     sampling:=repeatPinnedBackendSamples(samplingCtx,plan,backendReport,*repeats,*timeout,pinnedBackendProbe)
     stopSamples()
     result.Sampling=&sampling
