@@ -188,6 +188,34 @@ func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
   if r.Truncated||r.Checked<r.TotalResolved{fmt.Fprintln(w,wrapText(label("  注意：未覆盖全部解析 IP","  Note: not all resolved IPs checked"),width,"  "))}
   if opt.Verbose{fmt.Fprintln(w,wrapText("  "+r.Assessment,width,"  "))}
  }
+ if b.Sampling!=nil{
+  stats:=b.Sampling
+  fmt.Fprintln(w)
+  fmt.Fprintln(w,wrapText(fmt.Sprintf("%s: %d/%d (%s %d)",
+   label("重复采样","Repeat samples"),stats.TotalCompleted,stats.TotalPlanned,
+   label("每 IP 计划","planned per IP"),stats.Requested),width,""))
+  for _,node:=range stats.Nodes{
+   pct:=label("无 HTTP 响应","no HTTP response")
+   if node.MedianMS!=nil&&node.P95MS!=nil{
+    pct=fmt.Sprintf("median=%dms p95=%dms",*node.MedianMS,*node.P95MS)
+   }
+   line:=fmt.Sprintf("  %s · %d/%d · 2xx=%d redirect=%d restricted=%d errors=%d · %s",
+    node.IP,node.Completed,node.Planned,node.HTTP2xx,node.Redirects,node.Restricted,node.Errors,pct)
+   if !opt.Verbose{
+    line=fmt.Sprintf("  %s · %d/%d · %s",node.IP,node.Completed,node.Planned,pct)
+    if node.Errors>0{line+=fmt.Sprintf(" · errors=%d",node.Errors)}
+   }
+   fmt.Fprintln(w,wrapText(line,width,"  "))
+   if opt.Verbose{
+    for _,sample:=range node.Samples{
+     fmt.Fprintln(w,wrapText(fmt.Sprintf("    #%d %s %dms HTTP %d %s %s",
+      sample.Index,sample.Status,sample.DurationMS,sample.HTTPStatusCode,sample.HTTPProtocol,sample.TLSALPN),width,"    "))
+    }
+   }
+  }
+  if stats.Incomplete{fmt.Fprintln(w,wrapText(label("  注意：部分计划样本未执行","  Note: some planned samples were not executed"),width,"  "))}
+  if !opt.Verbose{fmt.Fprintln(w,wrapText(label("  注：小样本 P95 为描述值，不代表长期基线","  Note: small-sample P95 is descriptive, not a baseline"),width,"  "))}
+ }
  if b.AIAnalysis!=nil{
   a:=b.AIAnalysis
   fmt.Fprintln(w)
