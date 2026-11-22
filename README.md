@@ -159,7 +159,7 @@ The model must return JSON with `summary`, `evidence_ids`, `hypotheses` and `nex
 
 ## Diagnose terminal output modes
 
-NetKit defaults to a concise terminal summary: one compact status line for DNS/TCP/TLS/HTTP, a per-IP result list, and a short AI conclusion. Long AI text wraps to the terminal width; Chinese double-width characters are accounted for. Use `COLUMNS=60`, `COLUMNS=80` or `COLUMNS=120` to override the fallback width for redirected output. On an interactive TTY, statuses use unobtrusive colors unless `NO_COLOR` is set or `TERM=dumb`.
+NetKit defaults to a concise terminal summary: one compact status line for DNS/TCP/TLS/HTTP, a per-IP result list, and a short **deterministic diagnostic verdict** when an AI analysis is present. The verdict is generated from measured stage and backend status, **not** a modified quotation of the model output; the full original AI summary remains available in `-v` and `--output json`. Compact Chinese backend statuses are human-readable (e.g. `全部首跳正常` or `仅重定向`) and detailed English status codes and counters remain available in `-v`/JSON. Long AI text wraps to the terminal width; Chinese double-width characters are accounted for. Use `COLUMNS=60`, `COLUMNS=80` or `COLUMNS=120` to override the fallback width for redirected output. On an interactive TTY, statuses use unobtrusive colors unless `NO_COLOR` is set or `TERM=dumb`.
 
 ```sh
 ./netkit diagnose -all-ips -ai www.baidu.com
