@@ -119,3 +119,16 @@ func TestTemporalSnapshotFromActualDeterministicDiagnose(t *testing.T){
   t.Fatalf("missing real diagnostic provenance: %+v",r)
  }
 }
+
+func TestDiagnosticRepeatCLIValidationWithoutNetwork(t *testing.T){
+ for _,args:=range [][]string{
+  {"-repeat","0","example.com"},
+  {"-repeat","11","example.com"},
+  {"-repeat","2","-interval","0s","example.com"},
+  {"-repeat","2","-interval","61s","example.com"},
+  {"-all-ips","-interval","5s","example.com"},
+  {"-repeat","2","-all-ips","-interval","10s","example.com"},
+ }{
+  if err:=runDiagnose(args);err==nil{t.Fatalf("accepted invalid repeat flags: %v",args)}
+ }
+}
