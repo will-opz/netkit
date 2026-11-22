@@ -53,6 +53,7 @@ type EvidenceBundle struct {
  AIAnalysis *AIAnalysis `json:"ai_analysis,omitempty"`
  AIError string `json:"ai_error,omitempty"`
  Backends *PinnedBackendReport `json:"backends,omitempty"`
+ Sampling *BackendSampling `json:"sampling,omitempty"`
 }
 type DiagnosticResolve func(context.Context,string)([]net.IPAddr,error)
 type DiagnosticProbes struct {
@@ -198,11 +199,12 @@ func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,pro
  return bundle
 }
 func diagnoseHelp(){
- fmt.Println("用法: netkit diagnose [-timeout 5s] [-all-ips] [-ai] [-v] [-ai-allow-private] [--output text|json] [-lang zh|en] HOST|URL")
+ fmt.Println("用法: netkit diagnose [-timeout 5s] [-all-ips] [-repeat 1] [-ai] [-v] [-ai-allow-private] [--output text|json] [-lang zh|en] HOST|URL")
  fmt.Println("示例: netkit diagnose example.com")
  fmt.Println("      netkit diagnose --output json https://example.com")
  fmt.Println("      netkit diagnose -all-ips -ai baidu.com   # 逐个固定 IP 检测 HTTPS")
  fmt.Println("      netkit diagnose -v -all-ips -ai baidu.com # 显示完整文本证据")
+ fmt.Println("      netkit diagnose -all-ips -repeat 5 baidu.com # 同一 IP 重复采样")
  fmt.Println("默认只进行本机 DNS → TCP → TLS(HTTPS) → HTTP；-ai 可选接入 OpenAI-compatible API")
 }
 func runDiagnose(args []string)error{
@@ -214,10 +216,13 @@ func runDiagnose(args []string)error{
  ai:=fs.Bool("ai",false,"optional AI analysis via OpenAI-compatible Chat Completions")
  verbose:=fs.Bool("v",false,"show detailed diagnostic stages, backend evidence and AI next checks")
  allIPs:=fs.Bool("all-ips",false,"check up to 8 resolved IPs separately with preserved Host/SNI and TLS verification")
+ repeats:=fs.Int("repeat",1,"samples per resolved IP (1-10), requires -all-ips if greater than one")
  allowPrivate:=fs.Bool("ai-allow-private",false,"explicitly permit sending private/internal target evidence to AI")
  if err:=fs.Parse(args);err!=nil{return err}
  if fs.NArg()!=1{return errors.New("expected one HOST or URL")}
  if *timeout<=0||*timeout>60*time.Second{return errors.New("-timeout must be between 1ns and 60s")}
+ if *repeats<1||*repeats>maxPinnedRepeat{return errors.New("-repeat must be 1-10")}
+ if *repeats>1&&!*allIPs{return errors.New("-repeat > 1 requires -all-ips")}
  if *lang!="zh"&&*lang!="en"{return errors.New("-lang must be zh or en")}
  format,err:=resolveOutputFormat(*output,false)
  if err!=nil{return err}
@@ -233,6 +238,15 @@ func runDiagnose(args []string)error{
    backendReport:=probePinnedBackends(ipCtx,plan,ips,*timeout)
    stop()
    result.Backends=&backendReport
+   if *repeats>1{
+    // First observations are retained and reused; only (repeat-1)*IPs
+    // additional GETs are issued, with bounded total runtime and requests.
+    samplingCtx,stopSamples:=context.WithTimeout(context.Background(),
+     time.Duration(maxPinnedIPChecks*(*repeats-1))*(*timeout))
+    sampling:=repeatPinnedBackendSamples(samplingCtx,plan,backendReport,*repeats,*timeout,pinnedBackendProbe)
+    stopSamples()
+    result.Sampling=&sampling
+   }
   }
  }
  if *ai{
