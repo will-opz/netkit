@@ -9,6 +9,7 @@ import (
  "net"
  "net/http"
  "net/url"
+ "os"
  "strconv"
  "strings"
  "time"
@@ -197,10 +198,11 @@ func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,pro
  return bundle
 }
 func diagnoseHelp(){
- fmt.Println("用法: netkit diagnose [-timeout 5s] [-all-ips] [-ai] [-ai-allow-private] [--output text|json] [-lang zh|en] HOST|URL")
+ fmt.Println("用法: netkit diagnose [-timeout 5s] [-all-ips] [-ai] [-v] [-ai-allow-private] [--output text|json] [-lang zh|en] HOST|URL")
  fmt.Println("示例: netkit diagnose example.com")
  fmt.Println("      netkit diagnose --output json https://example.com")
  fmt.Println("      netkit diagnose -all-ips -ai baidu.com   # 逐个固定 IP 检测 HTTPS")
+ fmt.Println("      netkit diagnose -v -all-ips -ai baidu.com # 显示完整文本证据")
  fmt.Println("默认只进行本机 DNS → TCP → TLS(HTTPS) → HTTP；-ai 可选接入 OpenAI-compatible API")
 }
 func runDiagnose(args []string)error{
@@ -210,6 +212,7 @@ func runDiagnose(args []string)error{
  output:=fs.String("output","text","text or json")
  lang:=fs.String("lang","zh","zh or en")
  ai:=fs.Bool("ai",false,"optional AI analysis via OpenAI-compatible Chat Completions")
+ verbose:=fs.Bool("v",false,"show detailed diagnostic stages, backend evidence and AI next checks")
  allIPs:=fs.Bool("all-ips",false,"check up to 8 resolved IPs separately with preserved Host/SNI and TLS verification")
  allowPrivate:=fs.Bool("ai-allow-private",false,"explicitly permit sending private/internal target evidence to AI")
  if err:=fs.Parse(args);err!=nil{return err}
@@ -247,36 +250,7 @@ func runDiagnose(args []string)error{
   if err!=nil{return err}
   fmt.Println(string(b))
  }else{
-  zh:=*lang=="zh"
-  if zh{fmt.Printf("综合诊断: %s\n",plan.Target)
-  }else{fmt.Printf("Diagnostic: %s\n",plan.Target)}
-  for _,stage:=range result.Stages{
-   fmt.Printf("  %-8s %-12s %dms  [%s]",strings.ToUpper(stage.Layer),stage.Status,stage.DurationMS,stage.ID)
-   if stage.Error!=""{fmt.Printf("  %s",stage.Error)}
-   fmt.Println()
-  }
-  if zh{fmt.Printf("结果: %s",result.Status)
-  }else{fmt.Printf("Result: %s",result.Status)}
-  if result.FirstFailure!=""{fmt.Printf(" | First failure: %s",result.FirstFailure)}
-  fmt.Println()
-  if result.Backends!=nil{
-   name:="逐 IP 检测"
-   if *lang=="en"{name="Pinned IP probes"}
-   fmt.Printf("%s: %s (%d/%d) | 2xx=%d redirects=%d restricted=%d errors=%d\n",name,result.Backends.Status,result.Backends.Checked,result.Backends.TotalResolved,result.Backends.OKCount,result.Backends.RedirectCount,result.Backends.RestrictedCount,result.Backends.FailureCount)
-   fmt.Printf("  %s: %s\n",chooseAIText(*lang,"第一跳评估","First-hop assessment"),result.Backends.Assessment)
-   for _,b:=range result.Backends.Results{
-    fmt.Printf("  %-10s %-39s %-12s %dms",b.ID,b.IP,b.Status,b.DurationMS)
-    if b.HTTPStatusCode!=0{fmt.Printf(" HTTP %d",b.HTTPStatusCode)}
-    if b.HTTPProtocol!=""{fmt.Printf(" proto=%s",b.HTTPProtocol)}
-    if b.TLSALPN!=""{fmt.Printf(" alpn=%s",b.TLSALPN)}
-    if b.RedirectHost!=""{fmt.Printf(" redirect_host=%s",b.RedirectHost)}
-    if b.ErrorCode!=""{fmt.Printf(" %s",b.ErrorCode)}
-    fmt.Println()
-   }
-   if result.Backends.Truncated{fmt.Println(chooseAIText(*lang,"注意：最多检查 8 个 IP","Note: capped at 8 IPs"))}
-  }
-  if result.AIAnalysis!=nil{fmt.Print(formatAIAnalysis(*result.AIAnalysis,*lang))}
-  if result.AIError!=""{fmt.Printf("AI unavailable: %s\n",result.AIError)}
+  renderDiagnoseText(os.Stdout,result,terminalTextOptions(*lang,*verbose))
  }
  if result.Status=="failed"{return fmt.Errorf("diagnose: %s",result.FirstFailure)}
  return nil
