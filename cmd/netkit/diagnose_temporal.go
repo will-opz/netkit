@@ -92,7 +92,7 @@ func sampleDomainOverTime(ctx context.Context,first EvidenceBundle,repeats int,i
   default:out.FailedRounds++
   }
   signature:=temporalIPSignature(round.ResolvedIPs)
-  if i>0&&signature!=previous{out.DNSChanges++}
+  if i>0&&signature!=""&&previous!=""&&signature!=previous{out.DNSChanges++}
   previous=signature
  }
  switch{
