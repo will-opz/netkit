@@ -115,6 +115,6 @@ func repeatPinnedBackendSamples(ctx context.Context,plan DiagnosticPlan,first Pi
   finalizeSampleStats(&result.Nodes[i])
   result.TotalCompleted+=result.Nodes[i].Completed
  }
- result.Incomplete=result.TotalCompleted<result.TotalPlanned
+ result.Incomplete=result.TotalCompleted<result.TotalPlanned||first.Truncated||first.Checked<first.TotalResolved
  return result
 }
