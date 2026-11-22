@@ -269,3 +269,14 @@ No tagged release or Homebrew Tap update is permitted for this development miles
 - [x] Pass only allowlisted HTTP protocol/ALPN tokens and the known connection mode to AI, rather than arbitrary server-supplied values.
 - [x] Use local HTTP/1.1, TLS HTTP/1.1 and HTTP/2 test servers for offline protocol assertions, including redaction checks.
 - [ ] Capture real CDN per-IP protocol distributions at the user's observer location (results may vary with time/network); compare to browser/proxy behavior when supported by actual evidence.
+
+
+### Terminal output usability pass (2026-11-22)
+
+- [x] Extract optional `diagnose` text presentation from measurement/JSON emission into an independent rendering layer; add `-v` for stage evidence IDs, per-backend protocol/ALPN, and complete AI findings.
+- [x] Default compact text highlights status, per-layer durations, per-IP results and a concise AI summary. Additional details remain available through `-v` and `--output json`.
+- [x] Width-aware wrapping for Chinese and ASCII at 60, 80 and 120 columns; configurable `COLUMNS` fallback; terminal-only ANSI colors with `NO_COLOR` and `TERM=dumb` support.
+- [x] Preserve all existing `EvidenceBundle` and `ai_analysis` JSON data and network probes: verbosity affects text rendering only and does not trigger extra model requests.
+- [x] Deterministic snapshot-style width, ANSI and JSON-immutability regression tests; cross-platform CI verification.
+- [ ] Evaluate ergonomics interactively in the user's Mac terminal at different widths, including colors and unexpected long network error strings.
+
