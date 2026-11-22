@@ -280,3 +280,13 @@ No tagged release or Homebrew Tap update is permitted for this development miles
 - [x] Deterministic snapshot-style width, ANSI and JSON-immutability regression tests; cross-platform CI verification.
 - [ ] Evaluate ergonomics interactively in the user's Mac terminal at different widths, including colors and unexpected long network error strings.
 
+
+
+### Terminal concise verdict refinement (2026-11-22)
+
+- [x] Use localized human-readable labels for compact backend results, while keeping stable English status codes and counters in verbose/JSON output.
+- [x] On healthy local observations, synthesize a short evidence-derived verdict without echoing long model prose. Do not mistake this deterministic summary for an AI-authored quote; keep the model's entire original analysis in `-v` and JSON.
+- [x] Preserve exceptional states: failed stages retain first-failure information, redirect-only results explicitly say the redirected chain was not verified, and incomplete backend coverage remains visible.
+- [x] Add offline regression checks for concise wording, verbose model-text preservation, localization and avoiding an incorrect 2xx conclusion for redirects.
+- [ ] Run a final manual visual review on the user's actual terminal/font and address any misaligned punctuation or width wrapping artifacts.
+
