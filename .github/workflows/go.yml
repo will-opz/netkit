@@ -58,6 +58,12 @@ jobs:
           /tmp/netkit http -h
           /tmp/netkit tcp -h
           /tmp/netkit diagnose -h
+          # Temporal mode re-runs the full local diagnosis with fresh resolution.
+          if /tmp/netkit diagnose -repeat 2 -interval 100ms --output json http://127.0.0.1:1/ > /tmp/netkit-temporal.json 2>/dev/null; then exit 1; fi
+          python3 -c 'import json; r=json.load(open("/tmp/netkit-temporal.json")); assert r["temporal"]["requested"]==2 and r["temporal"]["completed"]==2 and r["temporal"]["failed_rounds"]==2'
+          # Advanced pinned repeat stays on the original IP, one additional request.
+          if /tmp/netkit diagnose -all-ips -repeat 2 --output json http://127.0.0.1:1/ > /tmp/netkit-sampling.json 2>/dev/null; then exit 1; fi
+          python3 -c 'import json; r=json.load(open("/tmp/netkit-sampling.json")); assert r["sampling"]["total_planned"]==2 and r["sampling"]["total_completed"]==2'
           if /tmp/netkit diagnose -all-ips --output json http://127.0.0.1:1/ > /tmp/netkit-pinned.json 2>/dev/null; then exit 1; fi
           python3 -c 'import json; r=json.load(open("/tmp/netkit-pinned.json")); assert r["backends"]["checked"]==1 and r["backends"]["results"][0]["ip"]=="127.0.0.1"'
           /tmp/netkit config --help
