@@ -153,7 +153,7 @@ func TestTemporalCompactAndVerboseWidth(t *testing.T){
   for _,verbose:=range []bool{false,true}{
    var out bytes.Buffer
    renderDiagnoseText(&out,b,diagnoseTextOptions{Width:width,Verbose:verbose,Lang:"zh"})
-   if !strings.Contains(out.String(),"round.2")||!strings.Contains(out.String(),"1 轮失败"){
+   if !strings.Contains(out.String(),"round.2")||!strings.Contains(out.String(),"跨时间发现故障"){
     t.Fatalf("temporal failure hidden: %s",out.String())
    }
    for _,line:=range strings.Split(strings.TrimSpace(out.String()),"\n"){
