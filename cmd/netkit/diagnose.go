@@ -54,6 +54,7 @@ type EvidenceBundle struct {
  AIError string `json:"ai_error,omitempty"`
  Backends *PinnedBackendReport `json:"backends,omitempty"`
  Sampling *BackendSampling `json:"sampling,omitempty"`
+ Temporal *TemporalSampling `json:"temporal,omitempty"`
 }
 type DiagnosticResolve func(context.Context,string)([]net.IPAddr,error)
 type DiagnosticProbes struct {
@@ -199,12 +200,13 @@ func diagnose(ctx context.Context,plan DiagnosticPlan,perStage time.Duration,pro
  return bundle
 }
 func diagnoseHelp(){
- fmt.Println("用法: netkit diagnose [-timeout 5s] [-all-ips] [-repeat 1] [-ai] [-v] [-ai-allow-private] [--output text|json] [-lang zh|en] HOST|URL")
+ fmt.Println("用法: netkit diagnose [-timeout 5s] [-all-ips] [-repeat 1] [-interval 5s] [-ai] [-v] [-ai-allow-private] [--output text|json] [-lang zh|en] HOST|URL")
  fmt.Println("示例: netkit diagnose example.com")
  fmt.Println("      netkit diagnose --output json https://example.com")
  fmt.Println("      netkit diagnose -all-ips -ai baidu.com   # 逐个固定 IP 检测 HTTPS")
  fmt.Println("      netkit diagnose -v -all-ips -ai baidu.com # 显示完整文本证据")
  fmt.Println("      netkit diagnose -all-ips -repeat 5 baidu.com # 同一 IP 重复采样")
+ fmt.Println("      netkit diagnose -repeat 10 -interval 30s baidu.com # 每轮重新 DNS/HTTP 诊断")
  fmt.Println("默认只进行本机 DNS → TCP → TLS(HTTPS) → HTTP；-ai 可选接入 OpenAI-compatible API")
 }
 func runDiagnose(args []string)error{
@@ -216,13 +218,19 @@ func runDiagnose(args []string)error{
  ai:=fs.Bool("ai",false,"optional AI analysis via OpenAI-compatible Chat Completions")
  verbose:=fs.Bool("v",false,"show detailed diagnostic stages, backend evidence and AI next checks")
  allIPs:=fs.Bool("all-ips",false,"check up to 8 resolved IPs separately with preserved Host/SNI and TLS verification")
- repeats:=fs.Int("repeat",1,"samples per resolved IP (1-10), requires -all-ips if greater than one")
+ repeats:=fs.Int("repeat",1,"repeat count (1-10): temporal domain checks, or pinned per-IP with -all-ips")
+ interval:=fs.Duration("interval",5*time.Second,"time between domain diagnostic rounds (100ms to 60s; incompatible with -all-ips)")
  allowPrivate:=fs.Bool("ai-allow-private",false,"explicitly permit sending private/internal target evidence to AI")
  if err:=fs.Parse(args);err!=nil{return err}
  if fs.NArg()!=1{return errors.New("expected one HOST or URL")}
  if *timeout<=0||*timeout>60*time.Second{return errors.New("-timeout must be between 1ns and 60s")}
  if *repeats<1||*repeats>maxPinnedRepeat{return errors.New("-repeat must be 1-10")}
- if *repeats>1&&!*allIPs{return errors.New("-repeat > 1 requires -all-ips")}
+ if *interval<100*time.Millisecond||*interval>60*time.Second{return errors.New("-interval must be between 100ms and 60s")}
+ if *allIPs{
+  intervalProvided:=false
+  fs.Visit(func(f *flag.Flag){if f.Name=="interval"{intervalProvided=true}})
+  if intervalProvided{return errors.New("-interval is for temporal domain sampling without -all-ips")}
+ }
  if *lang!="zh"&&*lang!="en"{return errors.New("-lang must be zh or en")}
  format,err:=resolveOutputFormat(*output,false)
  if err!=nil{return err}
@@ -231,6 +239,13 @@ func runDiagnose(args []string)error{
  ctx,cancel:=context.WithTimeout(context.Background(),10*(*timeout))
  defer cancel()
  result:=diagnose(ctx,plan,*timeout,defaultDiagnosticProbes())
+ if *repeats>1&&!*allIPs{
+  temporal:=sampleDomainOverTime(context.Background(),result,*repeats,*interval,*timeout,
+   func(ctx context.Context,plan DiagnosticPlan,limit time.Duration)EvidenceBundle{
+    return diagnose(ctx,plan,limit,defaultDiagnosticProbes())
+   })
+  result.Temporal=&temporal
+ }
  if *allIPs{
   if len(result.Stages)>0 && result.Stages[0].Status=="ok" && result.Stages[0].DNS!=nil{
    ips:=result.Stages[0].DNS.IPs
@@ -266,6 +281,7 @@ func runDiagnose(args []string)error{
  }else{
   renderDiagnoseText(os.Stdout,result,terminalTextOptions(*lang,*verbose))
  }
+ if result.Temporal!=nil&&result.Temporal.FailedRounds>0{return fmt.Errorf("diagnose: %d temporal rounds failed",result.Temporal.FailedRounds)}
  if result.Status=="failed"{return fmt.Errorf("diagnose: %s",result.FirstFailure)}
  return nil
 }
