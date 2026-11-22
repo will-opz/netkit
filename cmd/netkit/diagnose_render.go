@@ -123,6 +123,19 @@ func friendlyBackendStatus(status,lang string)string{
 // The compact verdict is built only from deterministic evidence, never by
 // heuristically shortening the model's free-form prose.
 func compactDiagnosticVerdict(b EvidenceBundle,lang string)string{
+ if b.Temporal!=nil{
+  t:=b.Temporal
+  label:=func(zh,en string)string{return chooseAIText(lang,zh,en)}
+  if t.Incomplete{return label("跨时间检查未完成，请根据已采集轮次判断。","Temporal checks were incomplete; use the observed rounds only.")}
+  if t.FailedRounds>0||t.DegradedRounds>0{
+   return fmt.Sprintf(label("跨时间检查发现 %d 轮失败、%d 轮受限；需查看发生时的证据。","Temporal checks saw %d failed and %d restricted rounds; inspect those observations."),t.FailedRounds,t.DegradedRounds)
+  }
+  if t.DNSChanges>0{
+   return fmt.Sprintf(label("本次全部 %d 轮正常，DNS 地址集合变化 %d 次；变化本身并非故障。","All %d temporal rounds passed; DNS address set changed %d times, which is not by itself a fault."),t.Completed,t.DNSChanges)
+  }
+  return fmt.Sprintf(label("本机连续 %d 轮检测均正常；不能据此保证长期可用性。","All %d local diagnostic rounds passed; long-term availability remains unproven."),t.Completed)
+ }
+
  label:=func(zh,en string)string{return chooseAIText(lang,zh,en)}
  if b.Status!="ok"{
   if b.FirstFailure!=""{return label("本次检测发现异常，首个失败阶段：","A failure was observed at ")+b.FirstFailure}
@@ -187,6 +200,23 @@ func renderDiagnoseText(w io.Writer,b EvidenceBundle,opt diagnoseTextOptions){
   }
   if r.Truncated||r.Checked<r.TotalResolved{fmt.Fprintln(w,wrapText(label("  注意：未覆盖全部解析 IP","  Note: not all resolved IPs checked"),width,"  "))}
   if opt.Verbose{fmt.Fprintln(w,wrapText("  "+r.Assessment,width,"  "))}
+ }
+ if b.Temporal!=nil{
+  t:=b.Temporal
+  fmt.Fprintln(w)
+  title:=fmt.Sprintf("%s: %d/%d · %s · DNS Δ=%d",
+   label("跨时间诊断","Temporal diagnostics"),t.Completed,t.Requested,t.Status,t.DNSChanges)
+  fmt.Fprintln(w,wrapText(title,width,""))
+  for _,round:=range t.Rounds{
+   line:=fmt.Sprintf("  %s %s · DNS IP=%d · HTTP=%d",round.ID,round.Status,len(round.ResolvedIPs),round.FinalHTTPCode)
+   if opt.Verbose{
+    line+=fmt.Sprintf(" · %s · %dms",round.ObservedAt,round.DurationMS)
+    if round.FirstFailure!=""{line+=" · "+round.FirstFailure}
+    line+=fmt.Sprintf(" · DNS=%s TCP=%s TLS=%s HTTP=%s",round.DNSStatus,round.TCPStatus,round.TLSStatus,round.HTTPStatus)
+   }
+   fmt.Fprintln(w,wrapText(line,width,"  "))
+  }
+  if t.Incomplete{fmt.Fprintln(w,wrapText(label("  注意：未完成全部预定轮次","  Note: not all rounds were completed"),width,"  "))}
  }
  if b.Sampling!=nil{
   stats:=b.Sampling
