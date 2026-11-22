@@ -170,6 +170,26 @@ NO_COLOR=1 ./netkit diagnose -all-ips www.baidu.com
 
 `-v` changes **only text rendering**, not probes, timeout, AI request or the versioned JSON schema. When a fault exists, compact mode retains the first failure and highlights the first recommended next check. `-v` retains stage evidence IDs, backend IDs, connection mode and full AI suggestions. The AI analysis remains the model's validated output; CLI condensation is not a second AI call and does not change token usage.
 
+## Temporal domain diagnostics and advanced per-IP repeat
+
+For CDN-backed sites, repeated **fresh domain resolution and end-to-end checks over time** are more representative of intermittent user-facing failures than repeatedly probing a fixed address. `-repeat` now has two explicit modes:
+
+```sh
+# Preferred intermittent-access test: fresh DNS → TCP → TLS → HTTP per round
+./netkit diagnose -repeat 5 -interval 5s www.baidu.com
+./netkit diagnose -repeat 10 -interval 30s -ai www.baidu.com
+
+# Advanced backend-specific investigation: repeat HTTP(S) first-hop by fixed IP
+./netkit diagnose -all-ips -repeat 3 www.baidu.com
+./netkit diagnose -all-ips -repeat 5 -v www.baidu.com
+```
+
+A plain `diagnose` remains one pass. `-repeat` is limited to 1–10; temporal `-interval` is limited to 100ms–60s, defaults to 5s, and is not accepted with `-all-ips`. Every temporal round independently queries the system DNS and performs the existing full diagnosis; the first round is reused from the initial invocation, not repeated. The additive `temporal` JSON object contains timestamped round statuses, resolved addresses, last HTTP status, stage results, counts and DNS address-set changes. Reordering DNS answers alone is not a change; failed DNS lookups are not automatically interpreted as address rotation. Only one optional AI analysis runs after all rounds.
+
+Advanced `-all-ips -repeat N` reuses the first single-hop pinned probe for each IP and adds at most N-1 more fresh direct HTTP(S) requests per IP (up to 8 IPs, 10 total samples per IP, 80 HTTP requests). The additive `sampling` JSON object includes individual attempts, status/protocol/ALPN distributions and min/median/P95/max of observed HTTP-response durations. Failures/timeouts are counted separately, not treated as zero-millisecond successes. **Small-sample P95 is descriptive, not a long-term CDN performance baseline**. All probes have bounded timeouts; interruption leaves explicit incomplete sample counts.
+
+Neither mode claims to identify a physical CDN server or confirm global availability. AI receives only sanitized sample counts and round statuses; internal IPs observed in any temporal round block external AI transmission unless explicitly authorized with `-ai-allow-private`. `-v` shows fuller per-round/per-attempt details.
+
 ## Pinned per-IP HTTP(S) checks (opt-in)
 
 `netkit diagnose -all-ips HOST` performs additional **sequential, pinned, single-hop HTTP(S) GET** requests to up to **8 distinct IPs** returned by the same system DNS lookup used by the initial diagnosis. `-timeout` limits each individual IP request; the group has an overall bound of eight times that timeout. The option is **off by default** and never makes additional requests to arbitrary names suggested by AI.
